@@ -12,6 +12,46 @@ st.set_page_config(page_title="مساعد مشرف تنمية العلاقات �
 # تهيئة قاعدة البيانات المحلية
 init_db()
 
+# --- نظام تسجيل الدخول ---
+if 'logged_in' not in st.session_state:
+    st.session_state.logged_in = False
+    st.session_state.user_role = None
+
+if not st.session_state.logged_in:
+    st.markdown("""
+        <div style="text-align: center; padding: 50px;">
+            <h1 style="color: #2c3e50;">🔐 نظام إدارة العلاقات المجتمعية</h1>
+            <p style="color: #7f8c8d;">يرجى تسجيل الدخول للمتابعة</p>
+        </div>
+    """, unsafe_allow_html=True)
+    
+    col1, col2, col3 = st.columns([1, 2, 1])
+    with col2:
+        tab_admin, tab_visitor = st.tabs(["👤 دخول المسؤول", "👁️ دخول الزوار"])
+        
+        with tab_admin:
+            with st.form("admin_login"):
+                st.subheader("تسجيل دخول (توفيق)")
+                pwd = st.text_input("كلمة المرور", type="password")
+                if st.form_submit_button("دخول"):
+                    # كلمة المرور الافتراضية 1234
+                    if pwd == "1234":
+                        st.session_state.logged_in = True
+                        st.session_state.user_role = "admin"
+                        st.rerun()
+                    else:
+                        st.error("كلمة المرور غير صحيحة")
+        
+        with tab_visitor:
+            st.info("بإمكانك الدخول كزائر لاستعراض البيانات والتقارير فقط دون صلاحية التعديل.")
+            if st.button("الدخول كزائر"):
+                st.session_state.logged_in = True
+                st.session_state.user_role = "visitor"
+                st.rerun()
+    st.stop()
+
+is_admin = st.session_state.user_role == "admin"
+
 # محاولة الربط بجوجل شيت
 try:
     conn_gs = st.connection("gsheets", type=GSheetsConnection)
@@ -127,6 +167,11 @@ menu = st.sidebar.radio(
 st.sidebar.markdown("---")
 st.sidebar.markdown("<p style='text-align:center; color:#95a5a6; font-size:0.7rem;'>تطوير: توفيق اليعقوبي</p>", unsafe_allow_html=True)
 
+if st.sidebar.button("🚪 تسجيل الخروج"):
+    st.session_state.logged_in = False
+    st.session_state.user_role = None
+    st.rerun()
+
 # --- معالجة البحث ---
 if search_query:
     all_dfs = {"الشركاء": load_data("parents"), "المبادرات": load_data("initiatives"), "الخطة": load_data("action_plan")}
@@ -172,102 +217,110 @@ if menu == "📊 لوحة التحكم":
 
 elif menu == "📅 خطة العمل":
     st.title("📅 خطة العمل السنوية")
-    with st.expander("➕ إضافة بند جديد"):
-        with st.form("pl_f"):
-            obj = st.text_input("الهدف")
-            act = st.text_input("النشاط")
-            resp = st.text_input("المسؤول")
-            timeframe = st.text_input("الجدول الزمني")
-            kpi = st.text_input("مؤشر الأداء (KPI)")
-            prio = st.selectbox("الأولوية", ["مرتفع", "متوسط", "منخفض"])
-            if st.form_submit_button("حفظ"):
-                conn = get_connection()
-                conn.execute("INSERT INTO action_plan (objective, activity, responsibility, timeframe, kpi, priority, status) VALUES (?,?,?,?,?,?,'قيد التنفيذ')", 
-                             (obj, act, resp, timeframe, kpi, prio))
-                conn.commit(); conn.close()
-                
-                # مزامنة سحابية
-                if conn_gs:
-                    try:
-                        new_data = pd.DataFrame([{"الهدف": obj, "النشاط": act, "المسؤول": resp, "الزمن": timeframe, "KPI": kpi, "الأولوية": prio, "الحالة": "قيد التنفيذ"}])
+    if is_admin:
+        with st.expander("➕ إضافة بند جديد"):
+            with st.form("pl_f"):
+                obj = st.text_input("الهدف")
+                act = st.text_input("النشاط")
+                resp = st.text_input("المسؤول")
+                timeframe = st.text_input("الجدول الزمني")
+                kpi = st.text_input("مؤشر الأداء (KPI)")
+                prio = st.selectbox("الأولوية", ["مرتفع", "متوسط", "منخفض"])
+                if st.form_submit_button("حفظ"):
+                    conn = get_connection()
+                    conn.execute("INSERT INTO action_plan (objective, activity, responsibility, timeframe, kpi, priority, status) VALUES (?,?,?,?,?,?,'قيد التنفيذ')", 
+                                 (obj, act, resp, timeframe, kpi, prio))
+                    conn.commit(); conn.close()
+                    
+                    # مزامنة سحابية
+                    if conn_gs:
                         try:
-                            existing = conn_gs.read(worksheet="ActionPlan", ttl=0)
-                            updated = pd.concat([existing, new_data], ignore_index=True)
-                        except: updated = new_data
-                        conn_gs.update(worksheet="ActionPlan", data=updated)
-                    except: pass
-                
-                st.success("تم الحفظ بنجاح")
-                st.rerun()
+                            new_data = pd.DataFrame([{"الهدف": obj, "النشاط": act, "المسؤول": resp, "الزمن": timeframe, "KPI": kpi, "الأولوية": prio, "الحالة": "قيد التنفيذ"}])
+                            try:
+                                existing = conn_gs.read(worksheet="ActionPlan", ttl=0)
+                                updated = pd.concat([existing, new_data], ignore_index=True)
+                            except: updated = new_data
+                            conn_gs.update(worksheet="ActionPlan", data=updated)
+                        except: pass
+                    
+                    st.success("تم الحفظ بنجاح")
+                    st.rerun()
     
     df_pl = load_data("action_plan")
     if not df_pl.empty:
         st.subheader("📋 بنود الخطة")
-        df_pl['حذف'] = False
-        edited_df = st.data_editor(df_pl, key="plan_edit", use_container_width=True)
-        if st.button("🔴 حذف المحدد من الخطة"):
-            to_del = edited_df[edited_df['حذف'] == True]
-            if not to_del.empty:
-                conn = get_connection()
-                for rid in to_del['id']: conn.execute(f"DELETE FROM action_plan WHERE id={rid}")
-                conn.commit(); conn.close()
-                
-                # تحديث السحاب
-                if conn_gs:
-                    try:
-                        remaining = load_data("action_plan")
-                        conn_gs.update(worksheet="Plan", data=remaining.drop(columns=['id', 'حذف'], errors='ignore'))
-                    except: pass
-                st.rerun()
+        if is_admin:
+            df_pl['حذف'] = False
+            edited_df = st.data_editor(df_pl, key="plan_edit", use_container_width=True)
+            if st.button("🔴 حذف المحدد من الخطة"):
+                to_del = edited_df[edited_df['حذف'] == True]
+                if not to_del.empty:
+                    conn = get_connection()
+                    for rid in to_del['id']: conn.execute(f"DELETE FROM action_plan WHERE id={rid}")
+                    conn.commit(); conn.close()
+                    
+                    # تحديث السحاب
+                    if conn_gs:
+                        try:
+                            remaining = load_data("action_plan")
+                            conn_gs.update(worksheet="Plan", data=remaining.drop(columns=['id', 'حذف'], errors='ignore'))
+                        except: pass
+                    st.rerun()
+        else:
+            st.dataframe(df_pl.drop(columns=['id'], errors='ignore'), use_container_width=True)
 
 elif menu == "👨‍👩‍👧‍👦 الشركاء وأولياء الأمور":
     st.title("👨‍👩‍👧‍👦 إدارة الشركاء الاستراتيجيين")
     df_i = load_data("initiatives")
     
-    with st.expander("➕ تسجيل شريك جديد"):
-        with st.form("p_f"):
-            name = st.text_input("الاسم")
-            type_p = st.selectbox("مجال الشراكة", ["دعم تعليمي", "دعم مالي", "خبرات مهنية", "تطوع", "مبادرات"])
-            exp = st.text_input("المجال / الخبرة التخصصية")
-            level = st.selectbox("مستوى التفاعل المتوقع", ["مرتفع", "متوسط", "محدود"])
-            if st.form_submit_button("إضافة شريك"):
-                conn = get_connection()
-                conn.execute("INSERT INTO parents (name, participation_type, expertise, interaction_level) VALUES (?,?,?,?)", (name, type_p, exp, level))
-                conn.commit(); conn.close()
-                
-                # مزامنة سحابية
-                if conn_gs:
-                    try:
-                        new_data = pd.DataFrame([{"الاسم": name, "النوع": type_p, "الخبرة": exp, "التفاعل": level, "التاريخ": str(datetime.now())}])
+    if is_admin:
+        with st.expander("➕ تسجيل شريك جديد"):
+            with st.form("p_f"):
+                name = st.text_input("الاسم")
+                type_p = st.selectbox("مجال الشراكة", ["دعم تعليمي", "دعم مالي", "خبرات مهنية", "تطوع", "مبادرات"])
+                exp = st.text_input("المجال / الخبرة التخصصية")
+                level = st.selectbox("مستوى التفاعل المتوقع", ["مرتفع", "متوسط", "محدود"])
+                if st.form_submit_button("إضافة شريك"):
+                    conn = get_connection()
+                    conn.execute("INSERT INTO parents (name, participation_type, expertise, interaction_level) VALUES (?,?,?,?)", (name, type_p, exp, level))
+                    conn.commit(); conn.close()
+                    
+                    # مزامنة سحابية
+                    if conn_gs:
                         try:
-                            existing = conn_gs.read(worksheet="Parents", ttl=0)
-                            updated = pd.concat([existing, new_data], ignore_index=True)
-                        except: updated = new_data
-                        conn_gs.update(worksheet="Parents", data=updated)
-                    except: pass
-                
-                st.success("تم تسجيل الشريك بنجاح")
-                st.rerun()
+                            new_data = pd.DataFrame([{"الاسم": name, "النوع": type_p, "الخبرة": exp, "التفاعل": level, "التاريخ": str(datetime.now())}])
+                            try:
+                                existing = conn_gs.read(worksheet="Parents", ttl=0)
+                                updated = pd.concat([existing, new_data], ignore_index=True)
+                            except: updated = new_data
+                            conn_gs.update(worksheet="Parents", data=updated)
+                        except: pass
+                    
+                    st.success("تم تسجيل الشريك بنجاح")
+                    st.rerun()
 
     df_p = load_data("parents")
     if not df_p.empty:
         st.subheader("🔍 استعراض الشركاء والربط الذكي")
-        df_p['حذف'] = False
-        edited_p = st.data_editor(df_p, key="p_edit", use_container_width=True)
-        if st.button("🔴 حذف المحدد من الشركاء"):
-            to_del = edited_p[edited_p['حذف'] == True]
-            if not to_del.empty:
-                conn = get_connection()
-                for rid in to_del['id']: conn.execute(f"DELETE FROM parents WHERE id={rid}")
-                conn.commit(); conn.close()
-                
-                # تحديث السحاب
-                if conn_gs:
-                    try:
-                        remaining = load_data("parents")
-                        conn_gs.update(worksheet="Parents", data=remaining.drop(columns=['id', 'حذف'], errors='ignore'))
-                    except: pass
-                st.rerun()
+        if is_admin:
+            df_p['حذف'] = False
+            edited_p = st.data_editor(df_p, key="p_edit", use_container_width=True)
+            if st.button("🔴 حذف المحدد من الشركاء"):
+                to_del = edited_p[edited_p['حذف'] == True]
+                if not to_del.empty:
+                    conn = get_connection()
+                    for rid in to_del['id']: conn.execute(f"DELETE FROM parents WHERE id={rid}")
+                    conn.commit(); conn.close()
+                    
+                    # تحديث السحاب
+                    if conn_gs:
+                        try:
+                            remaining = load_data("parents")
+                            conn_gs.update(worksheet="Parents", data=remaining.drop(columns=['id', 'حذف'], errors='ignore'))
+                        except: pass
+                    st.rerun()
+        else:
+            st.dataframe(df_p.drop(columns=['id'], errors='ignore'), use_container_width=True)
         
         st.divider()
         for _, row in df_p.iterrows():
@@ -288,98 +341,106 @@ elif menu == "🚀 إدارة المبادرات":
     st.title("🚀 توثيق وإدارة المبادرات")
     df_p = load_data("parents")
     
-    with st.expander("➕ توثيق مبادرة جديدة"):
-        with st.form("i_f"):
-            title = st.text_input("عنوان المبادرة")
-            partner = st.selectbox("الشريك المرتبط", ["بدون شريك"] + df_p['name'].tolist()) if not df_p.empty else st.text_input("الشريك")
-            desc = st.text_area("وصف المبادرة وأهدافها")
-            status = st.selectbox("الحالة الحالية", ["مخطط لها", "قيد التنفيذ", "مكتملة"])
-            impact = st.slider("مستوى الأثر (1-10)", 1, 10, 5)
-            if st.form_submit_button("حفظ المبادرة"):
-                conn = get_connection()
-                conn.execute("INSERT INTO initiatives (title, partner, description, status, impact_score) VALUES (?,?,?,?,?)", 
-                             (title, partner, desc, status, impact))
-                conn.commit(); conn.close()
-                
-                # مزامنة سحابية
-                if conn_gs:
-                    try:
-                        new_data = pd.DataFrame([{"العنوان": title, "الشريك": partner, "الوصف": desc, "الحالة": status, "الأثر": impact, "التاريخ": str(datetime.now())}])
+    if is_admin:
+        with st.expander("➕ توثيق مبادرة جديدة"):
+            with st.form("i_f"):
+                title = st.text_input("عنوان المبادرة")
+                partner = st.selectbox("الشريك المرتبط", ["بدون شريك"] + df_p['name'].tolist()) if not df_p.empty else st.text_input("الشريك")
+                desc = st.text_area("وصف المبادرة وأهدافها")
+                status = st.selectbox("الحالة الحالية", ["مخطط لها", "قيد التنفيذ", "مكتملة"])
+                impact = st.slider("مستوى الأثر (1-10)", 1, 10, 5)
+                if st.form_submit_button("حفظ المبادرة"):
+                    conn = get_connection()
+                    conn.execute("INSERT INTO initiatives (title, partner, description, status, impact_score) VALUES (?,?,?,?,?)", 
+                                 (title, partner, desc, status, impact))
+                    conn.commit(); conn.close()
+                    
+                    # مزامنة سحابية
+                    if conn_gs:
                         try:
-                            existing = conn_gs.read(worksheet="Initiatives", ttl=0)
-                            updated = pd.concat([existing, new_data], ignore_index=True)
-                        except: updated = new_data
-                        conn_gs.update(worksheet="Initiatives", data=updated)
-                    except: pass
-                
-                st.success("تم التوثيق والربط بنجاح")
-                st.rerun()
+                            new_data = pd.DataFrame([{"العنوان": title, "الشريك": partner, "الوصف": desc, "الحالة": status, "الأثر": impact, "التاريخ": str(datetime.now())}])
+                            try:
+                                existing = conn_gs.read(worksheet="Initiatives", ttl=0)
+                                updated = pd.concat([existing, new_data], ignore_index=True)
+                            except: updated = new_data
+                            conn_gs.update(worksheet="Initiatives", data=updated)
+                        except: pass
+                    
+                    st.success("تم التوثيق والربط بنجاح")
+                    st.rerun()
     
     df_i = load_data("initiatives")
     if not df_i.empty:
         st.subheader("📋 سجل المبادرات")
-        df_i['حذف'] = False
-        edited_i = st.data_editor(df_i, key="i_edit", use_container_width=True)
-        if st.button("🔴 حذف المبادرات المحددة"):
-            to_del = edited_i[edited_i['حذف'] == True]
-            if not to_del.empty:
-                conn = get_connection()
-                for rid in to_del['id']: conn.execute(f"DELETE FROM initiatives WHERE id={rid}")
-                conn.commit(); conn.close()
-                
-                # تحديث السحاب
-                if conn_gs:
-                    try:
-                        remaining = load_data("initiatives")
-                        conn_gs.update(worksheet="Initiatives", data=remaining.drop(columns=['id', 'حذف'], errors='ignore'))
-                    except: pass
-                st.rerun()
+        if is_admin:
+            df_i['حذف'] = False
+            edited_i = st.data_editor(df_i, key="i_edit", use_container_width=True)
+            if st.button("🔴 حذف المبادرات المحددة"):
+                to_del = edited_i[edited_i['حذف'] == True]
+                if not to_del.empty:
+                    conn = get_connection()
+                    for rid in to_del['id']: conn.execute(f"DELETE FROM initiatives WHERE id={rid}")
+                    conn.commit(); conn.close()
+                    
+                    # تحديث السحاب
+                    if conn_gs:
+                        try:
+                            remaining = load_data("initiatives")
+                            conn_gs.update(worksheet="Initiatives", data=remaining.drop(columns=['id', 'حذف'], errors='ignore'))
+                        except: pass
+                    st.rerun()
+        else:
+            st.dataframe(df_i.drop(columns=['id'], errors='ignore'), use_container_width=True)
 
 elif menu == "🎭 الفعاليات والأنشطة":
     st.title("🎭 إدارة الفعاليات والأنشطة")
-    with st.expander("🗓️ إضافة فعالية جديدة"):
-        with st.form("e_f"):
-            en = st.text_input("اسم الفعالية")
-            ed = st.date_input("التاريخ")
-            el = st.text_input("المكان")
-            at = st.number_input("عدد الحضور المتوقع", 0)
-            if st.form_submit_button("إضافة للجدول"):
-                conn = get_connection()
-                conn.execute("INSERT INTO events (name, date, location, attendees_count) VALUES (?,?,?,?)", (en, str(ed), el, at))
-                conn.commit(); conn.close()
-                
-                # مزامنة سحابية
-                if conn_gs:
-                    try:
-                        new_data = pd.DataFrame([{"الفعالية": en, "التاريخ": str(ed), "المكان": el, "الحضور": at}])
+    if is_admin:
+        with st.expander("🗓️ إضافة فعالية جديدة"):
+            with st.form("e_f"):
+                en = st.text_input("اسم الفعالية")
+                ed = st.date_input("التاريخ")
+                el = st.text_input("المكان")
+                at = st.number_input("عدد الحضور المتوقع", 0)
+                if st.form_submit_button("إضافة للجدول"):
+                    conn = get_connection()
+                    conn.execute("INSERT INTO events (name, date, location, attendees_count) VALUES (?,?,?,?)", (en, str(ed), el, at))
+                    conn.commit(); conn.close()
+                    
+                    # مزامنة سحابية
+                    if conn_gs:
                         try:
-                            existing = conn_gs.read(worksheet="Events", ttl=0)
-                            updated = pd.concat([existing, new_data], ignore_index=True)
-                        except: updated = new_data
-                        conn_gs.update(worksheet="Events", data=updated)
-                    except: pass
-                
-                st.rerun()
+                            new_data = pd.DataFrame([{"الفعالية": en, "التاريخ": str(ed), "المكان": el, "الحضور": at}])
+                            try:
+                                existing = conn_gs.read(worksheet="Events", ttl=0)
+                                updated = pd.concat([existing, new_data], ignore_index=True)
+                            except: updated = new_data
+                            conn_gs.update(worksheet="Events", data=updated)
+                        except: pass
+                    
+                    st.rerun()
     
     df_e = load_data("events")
     if not df_e.empty:
         st.subheader("🗓️ جدول الفعاليات")
-        df_e['حذف'] = False
-        edited_e = st.data_editor(df_e, key="e_edit", use_container_width=True)
-        if st.button("🔴 حذف الفعاليات المحددة"):
-            to_del = edited_e[edited_e['حذف'] == True]
-            if not to_del.empty:
-                conn = get_connection()
-                for rid in to_del['id']: conn.execute(f"DELETE FROM events WHERE id={rid}")
-                conn.commit(); conn.close()
-                
-                # تحديث السحاب
-                if conn_gs:
-                    try:
-                        remaining = load_data("events")
-                        conn_gs.update(worksheet="Events", data=remaining.drop(columns=['id', 'حذف'], errors='ignore'))
-                    except: pass
-                st.rerun()
+        if is_admin:
+            df_e['حذف'] = False
+            edited_e = st.data_editor(df_e, key="e_edit", use_container_width=True)
+            if st.button("🔴 حذف الفعاليات المحددة"):
+                to_del = edited_e[edited_e['حذف'] == True]
+                if not to_del.empty:
+                    conn = get_connection()
+                    for rid in to_del['id']: conn.execute(f"DELETE FROM events WHERE id={rid}")
+                    conn.commit(); conn.close()
+                    
+                    # تحديث السحاب
+                    if conn_gs:
+                        try:
+                            remaining = load_data("events")
+                            conn_gs.update(worksheet="Events", data=remaining.drop(columns=['id', 'حذف'], errors='ignore'))
+                        except: pass
+                    st.rerun()
+        else:
+            st.dataframe(df_e.drop(columns=['id'], errors='ignore'), use_container_width=True)
 
 elif menu == "📈 التقارير والإحصائيات":
     st.title("📈 مركز التقارير والتحليلات")
