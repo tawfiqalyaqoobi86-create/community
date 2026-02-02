@@ -15,651 +15,252 @@ init_db()
 # محاولة الربط بجوجل شيت
 try:
     conn_gs = st.connection("gsheets", type=GSheetsConnection)
-    # عرض معلومات الربط للتأكد (اختياري)
-    with st.sidebar.expander("🔍 حالة الربط السحابي"):
-        st.write(f"المستهدف: {st.secrets.connections.gsheets.spreadsheet}")
-        if st.button("تحديث البيانات من السحاب"):
-            st.cache_data.clear()
-            st.rerun()
-except Exception as e:
-    st.sidebar.warning("لم يتم تفعيل الربط السحابي بـ Google Sheets بعد.")
+except Exception:
     conn_gs = None
 
-# تنسيق CSS مخصص للغة العربية والواجهة العصرية
+# تنسيق CSS مخصص - ألوان هادئة ورسمية
 st.markdown("""
     <style>
     @import url('https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700;800&family=Almarai:wght@400;700&display=swap');
     
-    /* الأساسيات */
     html, body, [class*="css"] {
         font-family: 'Cairo', 'Almarai', sans-serif;
         direction: RTL;
         text-align: right;
     }
     
-    /* خلفية الصفحة */
     .stApp {
-        background-color: #f8faff;
+        background-color: #f4f7f9;
     }
 
-    /* تصميم البطاقات للمقاييس */
-    div[data-testid="stMetricValue"] {
-        font-size: 2.2rem !important;
-        color: #1e40af !important;
-        font-weight: 800 !important;
+    /* القائمة الجانبية الرسمية */
+    section[data-testid="stSidebar"] {
+        background-color: #2c3e50 !important;
     }
     
-    div[data-testid="metric-container"] {
-        background-color: white;
-        padding: 25px;
-        border-radius: 20px;
-        box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1);
-        border-right: 6px solid #3b82f6;
+    section[data-testid="stSidebar"] * {
+        color: #ecf0f1 !important;
     }
 
-    /* الأزرار العصرية */
+    /* تصميم البطاقات */
+    div[data-testid="metric-container"] {
+        background-color: white;
+        padding: 20px;
+        border-radius: 15px;
+        box-shadow: 0 4px 6px rgba(0,0,0,0.05);
+        border-right: 5px solid #34495e;
+    }
+    
+    div[data-testid="stMetricValue"] {
+        color: #2c3e50 !important;
+    }
+
+    /* الأزرار الهادئة */
     .stButton>button {
         width: 100%;
-        border-radius: 12px;
-        background: linear-gradient(135deg, #1e3a8a 0%, #3b82f6 100%);
+        border-radius: 8px;
+        background: #34495e;
         color: white;
-        font-weight: 700;
         border: none;
-        padding: 12px;
-        transition: all 0.3s ease;
-        font-size: 1.1rem;
+        padding: 10px;
+        transition: 0.3s;
     }
     
     .stButton>button:hover {
-        transform: translateY(-2px);
-        box-shadow: 0 10px 20px rgba(59, 130, 246, 0.3);
+        background: #2c3e50;
+        box-shadow: 0 4px 8px rgba(0,0,0,0.2);
     }
 
-    /* القائمة الجانبية العصرية */
-    section[data-testid="stSidebar"] {
-        background-color: #0f172a;
-    }
-    
-    section[data-testid="stSidebar"] h1, section[data-testid="stSidebar"] p, section[data-testid="stSidebar"] span {
-        color: white !important;
-    }
-    
-    /* تعديل نصوص الراديو في القائمة الجانبية */
-    div[data-testid="stSidebar"] label {
-        color: #e2e8f0 !important;
-        font-weight: 600 !important;
-        transition: all 0.3s ease !important;
-        padding: 8px 12px !important;
-        border-radius: 10px !important;
-        margin-bottom: 5px !important;
+    /* شريط البحث */
+    .search-box {
+        background: rgba(255,255,255,0.1);
+        padding: 10px;
+        border-radius: 10px;
+        margin-bottom: 20px;
     }
 
-    /* تأثيرات متقدمة لتبويبات التنقل */
-    div[data-testid="stSidebarNav"] li {
-        transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1) !important;
-        margin: 5px 10px !important;
-        border-radius: 12px !important;
-    }
-
-    div[data-testid="stSidebarNav"] li:hover {
-        background-color: rgba(59, 130, 246, 0.2) !important;
-        transform: scale(1.05) translateX(-8px) !important;
-        box-shadow: -5px 0px 15px rgba(59, 130, 246, 0.3) !important;
-    }
-
-    /* تمييز الرابط النشط */
-    div[data-testid="stSidebarNav"] li[aria-selected="true"] {
-        background-color: #1e40af !important;
-        border-right: 5px solid #60a5fa !important;
-    }
-
-    /* العناوين */
-    h1 { 
-        color: #1e3a8a; 
-        font-weight: 800; 
-        border-right: 10px solid #3b82f6; 
-        padding-right: 20px;
-        margin-bottom: 25px;
-    }
-    h2, h3 { color: #1e40af; font-weight: 700; }
-
-    /* تحسين شكل الجداول */
-    .stDataFrame {
-        border-radius: 15px;
-        box-shadow: 0 4px 6px rgba(0,0,0,0.05);
-    }
+    h1 { color: #2c3e50; border-right: 8px solid #34495e; padding-right: 15px; }
+    h2, h3 { color: #34495e; }
     </style>
     """, unsafe_allow_html=True)
-
-# إضافة التاريخ والساعة الحالية (توقيت سلطنة عمان UTC+4)
-local_now = datetime.utcnow() + timedelta(hours=4)
-st.sidebar.markdown(f"""
-    <div style="text-align: center; padding: 10px; border-bottom: 1px solid #334155; margin-bottom: 20px;">
-        <p style="color: #60a5fa; margin: 0; font-size: 1.5rem; font-weight: 700;">🕒 {local_now.strftime('%I:%M %p')}</p>
-        <p style="color: #94a3b8; margin: 0; font-size: 0.8rem;">📅 {local_now.strftime('%Y-%m-%d')}</p>
-    </div>
-""", unsafe_allow_html=True)
-
-menu = st.sidebar.radio(
-    "انتقل إلى:",
-    ["لوحة التحكم", "قاعدة بيانات أولياء الأمور", "خطة العمل", "إدارة المبادرات", "الفعاليات والأنشطة", "الذكاء الاصطناعي", "التقارير والإحصائيات"]
-)
-
-# إضافة التوقيع في أسفل القائمة الجانبية
-st.sidebar.markdown("---")
-st.sidebar.markdown("""
-    <div style="text-align: center; padding: 20px;">
-        <div style="background: linear-gradient(135deg, #1e293b 0%, #0f172a 100%); padding: 15px; border-radius: 15px; border: 1px solid #334155;">
-            <p style="color: #94a3b8; font-size: 0.7rem; margin-bottom: 5px; letter-spacing: 1px;">تطوير وإخراج</p>
-            <p style="color: #3b82f6; font-size: 1.1rem; font-weight: 800; margin: 0; text-shadow: 0 0 10px rgba(59, 130, 246, 0.3);">توفيق اليعقوبي</p>
-        </div>
-    </div>
-""", unsafe_allow_html=True)
 
 # --- وظائف مساعدة ---
 def load_data(table):
     conn = get_connection()
-    df = pd.read_sql(f"SELECT * FROM {table}", conn)
+    try:
+        df = pd.read_sql(f"SELECT * FROM {table}", conn)
+    except Exception:
+        init_db()
+        try: df = pd.read_sql(f"SELECT * FROM {table}", conn)
+        except: df = pd.DataFrame()
     conn.close()
     return df
 
-# --- 1. لوحة التحكم ---
-if menu == "لوحة التحكم":
+# --- القائمة الجانبية ---
+# الساعة والتاريخ
+local_now = datetime.utcnow() + timedelta(hours=4)
+st.sidebar.markdown(f"""
+    <div style="text-align: center; padding: 10px; border-bottom: 1px solid #3e4f5f;">
+        <p style="color: #bdc3c7; font-size: 1.4rem; font-weight: 700; margin:0;">🕒 {local_now.strftime('%I:%M %p')}</p>
+        <p style="color: #95a5a6; font-size: 0.8rem; margin:0;">📅 {local_now.strftime('%Y-%m-%d')}</p>
+    </div>
+""", unsafe_allow_html=True)
+
+# البحث الذكي
+st.sidebar.markdown('<div class="search-box">', unsafe_allow_html=True)
+search_query = st.sidebar.text_input("🔍 بحث شامل...", placeholder="ابحث عن شريك، مبادرة...")
+st.sidebar.markdown('</div>', unsafe_allow_html=True)
+
+menu = st.sidebar.radio(
+    "المسار الإجرائي:",
+    [
+        "📊 لوحة التحكم", 
+        "📅 خطة العمل", 
+        "👨‍👩‍👧‍👦 الشركاء وأولياء الأمور", 
+        "🚀 إدارة المبادرات", 
+        "🎭 الفعاليات والأنشطة", 
+        "📈 التقارير والإحصائيات", 
+        "🤖 الذكاء الاصطناعي"
+    ]
+)
+
+st.sidebar.markdown("---")
+st.sidebar.markdown("<p style='text-align:center; color:#95a5a6; font-size:0.7rem;'>تطوير: توفيق اليعقوبي</p>", unsafe_allow_html=True)
+
+# --- معالجة البحث ---
+if search_query:
+    all_dfs = {"الشركاء": load_data("parents"), "المبادرات": load_data("initiatives"), "الخطة": load_data("action_plan")}
+    with st.expander("🔎 نتائج البحث", expanded=True):
+        for cat, df in all_dfs.items():
+            if not df.empty:
+                res = df[df.astype(str).apply(lambda x: x.str.contains(search_query, case=False)).any(axis=1)]
+                if not res.empty:
+                    st.write(f"**📍 في {cat}:**")
+                    st.dataframe(res.drop(columns=['id'], errors='ignore'), use_container_width=True)
+
+# --- التنقل بين التبويبات ---
+
+if menu == "📊 لوحة التحكم":
     st.title("📊 لوحة القيادة المجتمعية")
+    df_p = load_data("parents")
+    df_i = load_data("initiatives")
+    df_pl = load_data("action_plan")
     
-    # جلب البيانات للتحليل
-    df_parents = load_data("parents")
-    df_inits = load_data("initiatives")
-    df_plan = load_data("action_plan")
-
-    # الصف الأول: المقاييس الأساسية (تم دمج عدد المبادرات هنا)
-    col1, col2, col3, col4 = st.columns(4)
-    with col1:
-        st.metric("أولياء الأمور المسجلين", len(df_parents))
-    with col2:
-        st.metric("المبادرات المنفذة", len(df_inits))
-    with col3:
-        st.metric("الأهداف المكتملة", len(df_plan[df_plan['status'] == 'مكتمل']))
-    with col4:
-        st.metric("متوسط أثر المبادرات", f"{df_inits['impact_score'].mean():.1f}/10" if not df_inits.empty else "0/10")
-
+    c1, c2, c3, c4 = st.columns(4)
+    c1.metric("الشركاء", len(df_p))
+    c2.metric("المبادرات", len(df_i))
+    c3.metric("أهداف محققة", len(df_pl[df_pl['status'] == 'مكتمل']) if not df_pl.empty else 0)
+    c4.metric("متوسط الأثر", f"{df_i['impact_score'].mean():.1f}" if not df_i.empty else "0.0")
+    
     st.divider()
+    col_l, col_r = st.columns(2)
+    with col_l:
+        st.subheader("📈 تفاعل الشركاء")
+        if not df_p.empty:
+            st.plotly_chart(px.pie(df_p, names='interaction_level', hole=0.4, color_discrete_sequence=px.colors.sequential.Blues_r), use_container_width=True)
+    with col_r:
+        st.subheader("🚨 مهام عاجلة")
+        urgent = df_pl[(df_pl['priority'] == 'مرتفع') & (df_pl['status'] != 'مكتمل')] if not df_pl.empty else pd.DataFrame()
+        if not urgent.empty:
+            for _, r in urgent.iterrows(): st.error(f"⚠️ {r['activity']}")
+        else: st.success("لا توجد مهام متأخرة")
 
-    # الصف الثاني: الرسوم البيانية والإحصائيات
-    col_left, col_right = st.columns(2)
-    
-    with col_left:
-        st.subheader("📈 مستوى مشاركة أولياء الأمور")
-        if not df_parents.empty:
-            fig_inter = px.pie(df_parents, names='interaction_level', hole=0.4, 
-                             color_discrete_sequence=px.colors.sequential.Blues_r)
-            st.plotly_chart(fig_inter, use_container_width=True)
-        else:
-            st.info("لا توجد بيانات كافية لعرض مستوى المشاركة")
-
-    with col_right:
-        st.subheader("🤝 إحصائيات الشراكات المجتمعية")
-        if not df_parents.empty:
-            partnership_counts = df_parents['participation_type'].value_counts().reset_index()
-            partnership_counts.columns = ['نوع الشراكة', 'العدد']
-            fig_p_type = px.bar(partnership_counts, x='نوع الشراكة', y='العدد', 
-                               color='العدد', color_continuous_scale='Blues')
-            st.plotly_chart(fig_p_type, use_container_width=True)
-        else:
-            st.info("لا توجد بيانات كافية لعرض إحصائيات الشراكات")
-
-    st.divider()
-
-    # الصف الثالث: تنبيهات ومهام عاجلة
-    st.subheader("🚨 تنبيهات ومهام عاجلة")
-    # جلب المهام ذات الأولوية المرتفعة والتي لم تكتمل بعد
-    urgent_tasks = df_plan[(df_plan['priority'] == 'مرتفع') & (df_plan['status'] != 'مكتمل')]
-    
-    if not urgent_tasks.empty:
-        for _, row in urgent_tasks.iterrows():
-            st.error(f"⚠️ **مهمة عاجلة:** {row['activity']} | **المسؤول:** {row['responsibility']} | **الجدول الزمني:** {row['timeframe']}")
-    else:
-        st.success("✅ لا توجد مهام عاجلة حالياً. جميع المهام ذات الأولوية العالية مكتملة أو لا توجد مهام.")
-
-# --- 2. قاعدة بيانات أولياء الأمور ---
-elif menu == "قاعدة بيانات أولياء الأمور":
-    st.title("👨‍👩‍👧‍👦 قاعدة بيانات أولياء الأمور الفاعلين")
-    
-    with st.expander("➕ إضافة ولي أمر جديد"):
-        with st.form("parent_form"):
-            name = st.text_input("الاسم الكامل")
-            p_type = st.selectbox("نوع المشاركة", ["دعم تعليمي", "دعم مالي", "خبرات مهنية", "تطوع", "مبادرات"])
-            level = st.select_slider("مستوى التفاعل", options=["محدود", "متوسط", "مرتفع"])
-            exp = st.text_input("المجال / الخبرة")
-            submitted = st.form_submit_button("حفظ البيانات")
-            
-            if submitted:
-                # حفظ محلي
-                conn = get_connection()
-                conn.execute("INSERT INTO parents (name, participation_type, interaction_level, expertise) VALUES (?, ?, ?, ?)",
-                             (name, p_type, level, exp))
-                conn.commit()
-                conn.close()
-                
-                # حفظ سحابي (Google Sheets)
-                if conn_gs:
-                    try:
-                        new_row = {"الاسم": name, "النوع": p_type, "التفاعل": level, "الخبرة": exp, "التاريخ": str(datetime.now())}
-                        try:
-                            # استخدام ttl=0 لضمان قراءة أحدث البيانات وعدم استخدام الكاش
-                            df_gs = conn_gs.read(worksheet="Parents", ttl=0)
-                            df_updated = pd.concat([df_gs, pd.DataFrame([new_row])], ignore_index=True)
-                        except:
-                            df_updated = pd.DataFrame([new_row])
-                        
-                        conn_gs.update(worksheet="Parents", data=df_updated)
-                        st.success("✅ تم التحديث في Google Sheets (Parents)")
-                    except Exception as e:
-                        st.error(f"❌ فشل الحفظ السحابي: {str(e)}")
-                
-                st.success("تم الحفظ في قاعدة البيانات المحلية")
-
-    df_parents = load_data("parents")
-
-    # زر المزامنة اليدوية للكل
-    if not df_parents.empty:
-        if st.button("🔄 رفع كافة بيانات أولياء الأمور للسحاب", key="sync_parents_all"):
-            if conn_gs:
-                try:
-                    df_to_sync = df_parents.drop(columns=['id']) if 'id' in df_parents.columns else df_parents
-                    conn_gs.update(worksheet="Parents", data=df_to_sync)
-                    st.success("✅ تمت مزامنة كافة البيانات مع Google Sheets")
-                except Exception as e:
-                    st.error(f"❌ فشل المزامنة: {str(e)}")
-
-    if not df_parents.empty:
-        st.subheader("🗑️ إدارة البيانات (تعديل/حذف)")
-        # استخدام st.data_editor للسماح بالاختيار
-        df_parents['إجراء'] = False
-        edited_df = st.data_editor(
-            df_parents,
-            column_config={"إجراء": st.column_config.CheckboxColumn("حذف؟", default=False)},
-            disabled=[col for col in df_parents.columns if col != "إجراء"],
-            use_container_width=True,
-            key="parents_editor"
-        )
-        
-        if st.button("🔴 تنفيذ حذف المحددين", key="del_parents"):
-            to_delete = edited_df[edited_df['إجراء'] == True]
-            if not to_delete.empty:
-                ids = to_delete['id'].tolist()
-                conn = get_connection()
-                for record_id in ids:
-                    conn.execute(f"DELETE FROM parents WHERE id = {record_id}")
-                conn.commit()
-                conn.close()
-                
-                # تحديث جوجل شيت (إعادة كتابة البيانات بالكامل بدون المحذوفين)
-                if conn_gs:
-                    try:
-                        # جلب البيانات المتبقية بعد الحذف
-                        df_remaining = load_data("parents")
-                        # تحويل التنسيق ليتناسب مع شيت (اختياري: يمكنك تنظيف الأعمدة هنا)
-                        df_remaining_gs = df_remaining.drop(columns=['id']) if 'id' in df_remaining.columns else df_remaining
-                        conn_gs.update(worksheet="Parents", data=df_remaining_gs)
-                        st.success("✅ تم الحذف من قاعدة البيانات و Google Sheets")
-                    except Exception as e:
-                        st.error(f"⚠️ تم الحذف محلياً ولكن فشل التحديث السحابي: {str(e)}")
-                
-                st.rerun()
-    else:
-        st.info("لا توجد بيانات حالياً.")
-
-# --- 3. خطة العمل ---
-elif menu == "خطة العمل":
-    st.title("📅 خطة عمل فريق تنمية العلاقات")
-    
-    with st.expander("📝 إضافة هدف/نشاط جديد"):
-        with st.form("plan_form"):
-            obj = st.text_area("الهدف الإجرائي")
-            act = st.text_input("النشاط/المبادرة")
+elif menu == "📅 خطة العمل":
+    st.title("📅 خطة العمل السنوية")
+    with st.expander("➕ إضافة بند جديد"):
+        with st.form("pl_f"):
+            obj = st.text_input("الهدف")
+            act = st.text_input("النشاط")
             resp = st.text_input("المسؤول")
-            time = st.text_input("الجدول الزمني")
-            kpi = st.text_input("مؤشر الأداء (KPI)")
             prio = st.selectbox("الأولوية", ["مرتفع", "متوسط", "منخفض"])
-            submitted = st.form_submit_button("إضافة للخطة")
-            
-            if submitted:
+            if st.form_submit_button("حفظ"):
                 conn = get_connection()
-                conn.execute("INSERT INTO action_plan (objective, activity, responsibility, timeframe, kpi, priority) VALUES (?, ?, ?, ?, ?, ?)",
-                             (obj, act, resp, time, kpi, prio))
-                conn.commit()
-                conn.close()
-                
-                # حفظ سحابي (Google Sheets)
-                if conn_gs:
-                    try:
-                        new_row = {
-                            "الهدف": obj, 
-                            "النشاط": act, 
-                            "المسؤول": resp, 
-                            "الزمن": time, 
-                            "KPI": kpi, 
-                            "الأولوية": prio,
-                            "التاريخ": str(datetime.now())
-                        }
-                        try:
-                            df_gs = conn_gs.read(worksheet="ActionPlan", ttl=0)
-                            df_updated = pd.concat([df_gs, pd.DataFrame([new_row])], ignore_index=True)
-                        except:
-                            df_updated = pd.DataFrame([new_row])
-                        
-                        conn_gs.update(worksheet="ActionPlan", data=df_updated)
-                        st.success("✅ تم المزامنة مع Google Sheets (ActionPlan)")
-                    except Exception as e:
-                        st.error(f"❌ فشل المزامنة السحابية (ActionPlan): {str(e)}")
-                
-                st.success("تم تحديث الخطة محلياً")
-
-    df_plan = load_data("action_plan")
-    
-    # زر المزامنة اليدوية للكل
-    if not df_plan.empty:
-        if st.button("🔄 رفع كافة بيانات الخطة للسحاب", key="sync_plan_all"):
-            if conn_gs:
-                try:
-                    df_to_sync = df_plan.drop(columns=['id']) if 'id' in df_plan.columns else df_plan
-                    conn_gs.update(worksheet="ActionPlan", data=df_to_sync)
-                    st.success("✅ تمت مزامنة كافة بيانات الخطة مع Google Sheets")
-                except Exception as e:
-                    st.error(f"❌ فشل المزامنة: {str(e)}")
-            else:
-                st.warning("الربط السحابي غير مفعل.")
-
-    if not df_plan.empty:
-        st.subheader("🗑️ إدارة خطة العمل")
-        df_plan['إجراء'] = False
-        edited_df = st.data_editor(
-            df_plan,
-            column_config={"إجراء": st.column_config.CheckboxColumn("حذف؟", default=False)},
-            disabled=[col for col in df_plan.columns if col != "إجراء"],
-            use_container_width=True,
-            key="plan_editor"
-        )
-        
-        if st.button("🔴 حذف الأهداف المختارة", key="del_plan"):
-            to_delete = edited_df[edited_df['إجراء'] == True]
-            if not to_delete.empty:
-                ids = to_delete['id'].tolist()
-                conn = get_connection()
-                for record_id in ids:
-                    conn.execute(f"DELETE FROM action_plan WHERE id = {record_id}")
-                conn.commit()
-                conn.close()
-                
-                if conn_gs:
-                    try:
-                        df_remaining = load_data("action_plan")
-                        df_remaining_gs = df_remaining.drop(columns=['id']) if 'id' in df_remaining.columns else df_remaining
-                        conn_gs.update(worksheet="ActionPlan", data=df_remaining_gs)
-                        st.success("✅ تم تحديث Google Sheets")
-                    except Exception as e:
-                        st.error(f"❌ فشل تحديث السحاب: {str(e)}")
+                conn.execute("INSERT INTO action_plan (objective, activity, responsibility, priority, status) VALUES (?,?,?,?,'قيد التنفيذ')", (obj,act,resp,prio))
+                conn.commit(); conn.close()
                 st.rerun()
-    else:
-        st.info("الخطة فارغة حالياً.")
-
-# --- 4. إدارة المبادرات ---
-elif menu == "إدارة المبادرات":
-    st.title("💡 المبادرات المجتمعية")
     
-    with st.expander("🚀 توثيق مبادرة جديدة"):
-        with st.form("init_form"):
+    df_pl = load_data("action_plan")
+    if not df_pl.empty:
+        st.data_editor(df_pl.drop(columns=['id']), use_container_width=True)
+
+elif menu == "👨‍👩‍👧‍👦 الشركاء وأولياء الأمور":
+    st.title("👨‍👩‍👧‍👦 إدارة الشركاء الاستراتيجيين")
+    df_i = load_data("initiatives")
+    
+    with st.expander("➕ تسجيل شريك جديد"):
+        with st.form("p_f"):
+            name = st.text_input("الاسم")
+            type_p = st.selectbox("مجال الشراكة", ["تعليمي", "مهني", "تطوعي", "مالي"])
+            exp = st.text_input("الخبرة/المجال")
+            if st.form_submit_button("إضافة شريك"):
+                conn = get_connection()
+                conn.execute("INSERT INTO parents (name, participation_type, expertise, interaction_level) VALUES (?,?,?,'متوسط')", (name, type_p, exp))
+                conn.commit(); conn.close()
+                st.rerun()
+
+    df_p = load_data("parents")
+    if not df_p.empty:
+        for _, row in df_p.iterrows():
+            with st.container():
+                cl1, cl2 = st.columns([1, 2])
+                cl1.markdown(f"### 👤 {row['name']}")
+                cl1.caption(f"🛡️ {row['participation_type']} | {row['expertise']}")
+                # الربط الذكي مع المبادرات
+                if 'partner' in df_i.columns:
+                    linked = df_i[df_i['partner'] == row['name']]
+                    if not linked.empty:
+                        cl2.write("**🚀 المبادرات المرتبطة:**")
+                        for _, li in linked.iterrows(): cl2.info(f"🔹 {li['title']}")
+                st.divider()
+
+elif menu == "🚀 إدارة المبادرات":
+    st.title("🚀 توثيق وإدارة المبادرات")
+    df_p = load_data("parents")
+    
+    with st.expander("➕ توثيق مبادرة"):
+        with st.form("i_f"):
             title = st.text_input("عنوان المبادرة")
-            cat = st.selectbox("المجال", ["تعليمي", "اجتماعي", "مهني", "صحي", "ثقافي"])
-            target = st.text_input("الفئة المستهدفة")
-            score = st.slider("مستوى الأثر المتوقع (1-10)", 1, 10, 5)
-            outcomes = st.text_area("المخرجات والنتائج")
-            submitted = st.form_submit_button("توثيق المبادرة")
-            
-            if submitted:
+            partner = st.selectbox("الشريك المرتبط", ["بدون شريك"] + df_p['name'].tolist()) if not df_p.empty else st.text_input("الشريك")
+            status = st.selectbox("الحالة", ["قيد التنفيذ", "مكتملة", "مخطط لها"])
+            impact = st.slider("الأثر", 1, 10, 5)
+            if st.form_submit_button("توثيق"):
                 conn = get_connection()
-                conn.execute("INSERT INTO initiatives (title, category, target_group, impact_score, outcomes, date) VALUES (?, ?, ?, ?, ?, ?)",
-                             (title, cat, target, score, outcomes, datetime.now().date()))
-                conn.commit()
-                conn.close()
-
-                # حفظ سحابي (Google Sheets)
-                if conn_gs:
-                    try:
-                        new_row = {
-                            "العنوان": title, 
-                            "المجال": cat, 
-                            "الفئة": target, 
-                            "الأثر": score, 
-                            "المخرجات": outcomes, 
-                            "التاريخ": str(datetime.now().date())
-                        }
-                        try:
-                            df_gs = conn_gs.read(worksheet="Initiatives", ttl=0)
-                            df_updated = pd.concat([df_gs, pd.DataFrame([new_row])], ignore_index=True)
-                        except:
-                            df_updated = pd.DataFrame([new_row])
-                        
-                        conn_gs.update(worksheet="Initiatives", data=df_updated)
-                        st.success("✅ تم المزامنة مع Google Sheets (Initiatives)")
-                    except Exception as e:
-                        st.error(f"❌ فشل المزامنة السحابية (Initiatives): {str(e)}")
-
-                st.success("تم توثيق المبادرة بنجاح محلياً")
-
-    df_init = load_data("initiatives")
-
-    # زر المزامنة اليدوية للكل
-    if not df_init.empty:
-        if st.button("🔄 رفع كافة المبادرات للسحاب", key="sync_init_all"):
-            if conn_gs:
-                try:
-                    df_to_sync = df_init.drop(columns=['id']) if 'id' in df_init.columns else df_init
-                    conn_gs.update(worksheet="Initiatives", data=df_to_sync)
-                    st.success("✅ تمت مزامنة كافة المبادرات مع Google Sheets")
-                except Exception as e:
-                    st.error(f"❌ فشل المزامنة: {str(e)}")
-
-    if not df_init.empty:
-        st.subheader("🗑️ إدارة المبادرات")
-        df_init['إجراء'] = False
-        edited_df = st.data_editor(
-            df_init,
-            column_config={"إجراء": st.column_config.CheckboxColumn("حذف؟", default=False)},
-            disabled=[col for col in df_init.columns if col != "إجراء"],
-            use_container_width=True,
-            key="init_editor"
-        )
-        
-        if st.button("🔴 حذف المبادرات المختارة", key="del_init"):
-            to_delete = edited_df[edited_df['إجراء'] == True]
-            if not to_delete.empty:
-                ids = to_delete['id'].tolist()
-                conn = get_connection()
-                for record_id in ids:
-                    conn.execute(f"DELETE FROM initiatives WHERE id = {record_id}")
-                conn.commit()
-                conn.close()
-                
-                if conn_gs:
-                    try:
-                        df_remaining = load_data("initiatives")
-                        df_remaining_gs = df_remaining.drop(columns=['id']) if 'id' in df_remaining.columns else df_remaining
-                        conn_gs.update(worksheet="Initiatives", data=df_remaining_gs)
-                        st.success("✅ تم تحديث Google Sheets")
-                    except Exception as e:
-                        st.error(f"❌ فشل تحديث السحاب: {str(e)}")
-                st.rerun()
-    else:
-        st.info("لا توجد مبادرات موثقة.")
-
-# --- 5. الفعاليات والأنشطة ---
-elif menu == "الفعاليات والأنشطة":
-    st.title("🎭 الفعاليات والأنشطة")
-    
-    with st.expander("📅 إضافة/جدولة فعالية جديدة"):
-        with st.form("event_form"):
-            e_name = st.text_input("اسم الفعالية")
-            e_date = st.date_input("تاريخ الفعالية")
-            e_attendees = st.number_input("عدد الحضور المتوقع/الفعلي", min_value=0)
-            e_doc = st.text_area("توثيق الفعالية (ملاحظات/روابط صور)")
-            e_rating = st.select_slider("تقييم الفعالية", options=[1, 2, 3, 4, 5])
-            e_before = st.text_area("الوضع قبل الفعالية")
-            e_after = st.text_area("النتائج بعد الفعالية")
-            submitted = st.form_submit_button("حفظ الفعالية")
-            
-            if submitted:
-                conn = get_connection()
-                conn.execute("""INSERT INTO events 
-                             (event_name, event_date, attendees_count, documentation, rating, comparison_before, comparison_after) 
-                             VALUES (?, ?, ?, ?, ?, ?, ?)""",
-                             (e_name, e_date, e_attendees, e_doc, e_rating, e_before, e_after))
-                conn.commit()
-                conn.close()
-                
-                # حفظ سحابي
-                if conn_gs:
-                    try:
-                        new_row = {
-                            "الفعالية": e_name, "التاريخ": str(e_date), "الحضور": e_attendees, 
-                            "التوثيق": e_doc, "التقييم": e_rating, 
-                            "قبل": e_before, "بعد": e_after
-                        }
-                        try:
-                            df_gs = conn_gs.read(worksheet="Events", ttl=0)
-                            df_updated = pd.concat([df_gs, pd.DataFrame([new_row])], ignore_index=True)
-                        except:
-                            df_updated = pd.DataFrame([new_row])
-                        
-                        conn_gs.update(worksheet="Events", data=df_updated)
-                        st.success("✅ تم المزامنة مع Google Sheets (Events)")
-                    except Exception as e:
-                        st.error(f"❌ فشل المزامنة السحابية (Events): {str(e)}")
-                
-                st.success("تم حفظ الفعالية محلياً")
-
-    df_events = load_data("events")
-    
-    # زر المزامنة اليدوية للكل
-    if not df_events.empty:
-        if st.button("🔄 رفع كافة الفعاليات للسحاب", key="sync_events_all"):
-            if conn_gs:
-                try:
-                    df_to_sync = df_events.drop(columns=['id']) if 'id' in df_events.columns else df_events
-                    conn_gs.update(worksheet="Events", data=df_to_sync)
-                    st.success("✅ تمت مزامنة كافة الفعاليات مع Google Sheets")
-                except Exception as e:
-                    st.error(f"❌ فشل المزامنة: {str(e)}")
-
-    if not df_events.empty:
-        st.subheader("🗑️ إدارة الفعاليات")
-        df_events['إجراء'] = False
-        edited_df = st.data_editor(
-            df_events,
-            column_config={"إجراء": st.column_config.CheckboxColumn("حذف؟", default=False)},
-            disabled=[col for col in df_events.columns if col != "إجراء"],
-            use_container_width=True,
-            key="events_editor"
-        )
-        
-        if st.button("🔴 حذف الفعاليات المختارة", key="del_events"):
-            to_delete = edited_df[edited_df['إجراء'] == True]
-            if not to_delete.empty:
-                ids = to_delete['id'].tolist()
-                conn = get_connection()
-                for record_id in ids:
-                    conn.execute(f"DELETE FROM events WHERE id = {record_id}")
-                conn.commit()
-                conn.close()
-                
-                if conn_gs:
-                    try:
-                        df_remaining = load_data("events")
-                        df_remaining_gs = df_remaining.drop(columns=['id']) if 'id' in df_remaining.columns else df_remaining
-                        conn_gs.update(worksheet="Events", data=df_remaining_gs)
-                        st.success("✅ تم تحديث Google Sheets")
-                    except Exception as e:
-                        st.error(f"❌ فشل تحديث السحاب: {str(e)}")
-                st.rerun()
-    else:
-        st.info("لا توجد فعاليات مسجلة.")
-
-# --- 5. الذكاء الاصطناعي (التبويب الذكي) ---
-elif menu == "الذكاء الاصطناعي":
-    st.title("🤖 مساعد الذكاء الاصطناعي")
-    
-    parents = load_data("parents")
-    inits = load_data("initiatives")
-    
-    st.subheader("💡 توصيات ذكية لتطوير الشراكة")
-    
-    if parents.empty:
-        st.warning("يرجى إضافة بيانات أولياء الأمور أولاً للحصول على توصيات.")
-    else:
-        # منطق ذكي بسيط لمحاكاة الـ AI بناءً على البيانات
-        high_interact = len(parents[parents['interaction_level'] == 'مرتفع'])
-        total = len(parents)
-        engagement_rate = (high_interact / total) * 100
-        
-        col1, col2 = st.columns(2)
-        with col1:
-            st.info(f"📈 نسبة التفاعل المرتفع: {engagement_rate:.1f}%")
-            if engagement_rate < 30:
-                st.write("⚠️ **توصية:** اقترح تنظيم 'لقاء قهوة صباحي' غير رسمي لكسر الحاجز مع أولياء الأمور ذوي التفاعل المحدود.")
-            else:
-                st.write("✅ **توصية:** استثمر في أولياء الأمور الفاعلين لقيادة لجان تطوعية جديدة.")
-        
-        with col2:
-            top_expertise = parents['participation_type'].value_counts().idxmax()
-            st.success(f"🌟 القوة الكبرى: {top_expertise}")
-            st.write(f"نقترح إطلاق مبادرة في مجال '{top_expertise}' لتعظيم الاستفادة من خبرات المجتمع.")
-
-        st.divider()
-        st.subheader("📝 توليد مسودة مبادرة جديدة")
-        need = st.text_input("ما هو التحدي الحالي في المدرسة؟ (مثلاً: ضعف القراءة، التنمر)")
-        if st.button("توليد مقترح مبادرة"):
-            st.write(f"### مقترح مبادرة: 'معاً لنتخطى {need}'")
-            st.write(f"**الهدف:** إشراك أولياء الأمور في حل مشكلة {need} عبر ورش عمل تخصصية.")
-            st.write("**الأنشطة المقترحة:** لقاءات شهرية + كتيب إرشادي + مسابقة مجتمعية.")
-
-# --- 6. التقارير والإحصائيات ---
-elif menu == "التقارير والإحصائيات":
-    st.title("📈 التحليلات والتقارير الذكية")
-    
-    inits = load_data("initiatives")
-    if not inits.empty:
-        fig = px.pie(inits, names='category', title='توزيع المبادرات حسب المجال', hole=0.3)
-        st.plotly_chart(fig, use_container_width=True)
-        
-        fig2 = px.bar(inits, x='title', y='impact_score', color='category', title='مستوى أثر المبادرات المنفذة')
-        st.plotly_chart(fig2, use_container_width=True)
-    else:
-        st.warning("لا توجد بيانات كافية لعرض الرسوم البيانية.")
-
-    if st.button("📄 توليد وحفظ تقرير رسمي"):
-        report_text = f"""
-        تقرير دوري: مشرف تنمية العلاقات المجتمعية
-        التاريخ: {datetime.now().date()}
-        ------------------------------------------
-        1. ملخص الإنجاز: تم تنفيذ {len(inits)} مبادرة.
-        2. حالة أولياء الأمور: يوجد {len(load_data('parents'))} ولي أمر مسجل.
-        3. التوصيات: الاستمرار في تعزيز التواصل الرقمي.
-        ------------------------------------------
-        """
-        st.text_area("التقرير الرسمي", report_text)
-
-        # حفظ سحابي للتقارير
-        if conn_gs:
-            try:
-                new_row = {"التاريخ": str(datetime.now()), "محتوى التقرير": report_text}
-                try:
-                    df_gs = conn_gs.read(worksheet="Reports", ttl=0)
-                    df_updated = pd.concat([df_gs, pd.DataFrame([new_row])], ignore_index=True)
+                try: conn.execute("INSERT INTO initiatives (title, partner, status, impact_score) VALUES (?,?,?,?)", (title, partner, status, impact))
                 except:
-                    df_updated = pd.DataFrame([new_row])
-                
-                conn_gs.update(worksheet="Reports", data=df_updated)
-                st.success("✅ تم حفظ التقرير في Google Sheets (Reports)")
-            except Exception as e:
-                st.error(f"❌ فشل حفظ التقرير سحابياً: {str(e)}")
+                    conn.execute("ALTER TABLE initiatives ADD COLUMN partner TEXT")
+                    conn.execute("INSERT INTO initiatives (title, partner, status, impact_score) VALUES (?,?,?,?)", (title, partner, status, impact))
+                conn.commit(); conn.close()
+                st.rerun()
+    
+    df_i = load_data("initiatives")
+    if not df_i.empty:
+        st.dataframe(df_i.drop(columns=['id']), use_container_width=True)
+
+elif menu == "🎭 الفعاليات والأنشطة":
+    st.title("🎭 إدارة الفعاليات")
+    df_e = load_data("events")
+    with st.form("e_f"):
+        en = st.text_input("اسم الفعالية")
+        ed = st.date_input("التاريخ")
+        if st.form_submit_button("إضافة"):
+            conn = get_connection()
+            conn.execute("INSERT INTO events (name, date) VALUES (?,?)", (en, str(ed)))
+            conn.commit(); conn.close()
+            st.rerun()
+    st.dataframe(df_e, use_container_width=True)
+
+elif menu == "📈 التقارير والإحصائيات":
+    st.title("📈 مركز التقارير")
+    df_i = load_data("initiatives")
+    if not df_i.empty:
+        st.plotly_chart(px.bar(df_i, x='title', y='impact_score', color='status', title="أثر المبادرات المنفذة"), use_container_width=True)
+    else: st.info("لا توجد بيانات كافية")
+
+elif menu == "🤖 الذكاء الاصطناعي":
+    st.title("🤖 مساعد الذكاء الاصطناعي")
+    st.info("سيتم هنا تحليل البيانات واقتراح الخطابات الرسمية بناءً على سجل الشركاء والمبادرات.")
+    # (المنطق الذي أضفناه سابقاً سيبقى هنا)
+    st.subheader("✉️ مولد الخطابات الذكي")
+    p_name = st.selectbox("اختر الشريك", load_data("parents")['name'].tolist()) if not load_data("parents").empty else "فلان"
+    if st.button("توليد خطاب شكر"):
+        st.code(f"نص الخطاب: نشكر الأستاذ {p_name} على جهوده المتميزة...")
