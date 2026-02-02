@@ -2,7 +2,8 @@ import streamlit as st
 import pandas as pd
 import plotly.express as px
 from database import get_connection, init_db
-from datetime import datetime
+from datetime import datetime, timedelta
+import time
 from streamlit_gsheets import GSheetsConnection
 
 # إعدادات الصفحة
@@ -133,12 +134,12 @@ st.markdown("""
 # العنوان الجانبي
 st.sidebar.title("🗂️ القائمة الرئيسية")
 
-# إضافة التاريخ والساعة الحالية
-now = datetime.now()
+# إضافة التاريخ والساعة الحالية (توقيت محلي UTC+3)
+local_now = datetime.utcnow() + timedelta(hours=3)
 st.sidebar.markdown(f"""
-    <div style="background-color: rgba(59, 130, 246, 0.1); padding: 15px; border-radius: 10px; border-right: 4px solid #3b82f6; margin-bottom: 20px;">
-        <p style="color: #60a5fa; margin: 0; font-size: 0.9rem;">📅 التاريخ: {now.strftime('%Y-%m-%d')}</p>
-        <p style="color: #60a5fa; margin: 0; font-size: 0.9rem;">🕒 الساعة: {now.strftime('%H:%M:%S')}</p>
+    <div style="text-align: center; padding: 10px; border-bottom: 1px solid #334155; margin-bottom: 20px;">
+        <p style="color: #60a5fa; margin: 0; font-size: 1.2rem; font-weight: 700;">🕒 {local_now.strftime('%H:%M:%S')}</p>
+        <p style="color: #94a3b8; margin: 0; font-size: 0.8rem;">📅 {local_now.strftime('%Y-%m-%d')}</p>
     </div>
 """, unsafe_allow_html=True)
 
@@ -167,23 +168,6 @@ def load_data(table):
 
 # --- 1. لوحة التحكم ---
 if menu == "لوحة التحكم":
-    # عرض علوي فخم للتاريخ والترحيب
-    now = datetime.now()
-    st.markdown(f"""
-        <div style="background: linear-gradient(90deg, #1e3a8a 0%, #3b82f6 100%); padding: 30px; border-radius: 20px; color: white; margin-bottom: 30px; box-shadow: 0 10px 20px rgba(59, 130, 246, 0.2);">
-            <div style="display: flex; justify-content: space-between; align-items: center;">
-                <div>
-                    <h2 style="color: white; margin: 0; font-size: 1.8rem;">مرحباً بك، أ. توفيق اليعقوبي 👋</h2>
-                    <p style="margin: 5px 0 0 0; opacity: 0.9;">نتمنى لك يوماً مليئاً بالإنجازات المجتمعية المثمرة.</p>
-                </div>
-                <div style="text-align: left;">
-                    <h3 style="color: white; margin: 0; font-size: 1.5rem;">{now.strftime('%H:%M:%S')}</h3>
-                    <p style="margin: 0; opacity: 0.9;">{now.strftime('%Y-%m-%d')}</p>
-                </div>
-            </div>
-        </div>
-    """, unsafe_allow_html=True)
-
     st.title("📊 لوحة القيادة المجتمعية")
     col1, col2, col3, col4 = st.columns(4)
     
