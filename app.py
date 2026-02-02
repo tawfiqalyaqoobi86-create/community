@@ -132,10 +132,29 @@ st.markdown("""
 
 # العنوان الجانبي
 st.sidebar.title("🗂️ القائمة الرئيسية")
+
+# إضافة التاريخ والساعة الحالية
+now = datetime.now()
+st.sidebar.markdown(f"""
+    <div style="background-color: rgba(59, 130, 246, 0.1); padding: 15px; border-radius: 10px; border-right: 4px solid #3b82f6; margin-bottom: 20px;">
+        <p style="color: #60a5fa; margin: 0; font-size: 0.9rem;">📅 التاريخ: {now.strftime('%Y-%m-%d')}</p>
+        <p style="color: #60a5fa; margin: 0; font-size: 0.9rem;">🕒 الساعة: {now.strftime('%H:%M:%S')}</p>
+    </div>
+""", unsafe_allow_html=True)
+
 menu = st.sidebar.radio(
     "انتقل إلى:",
     ["لوحة التحكم", "قاعدة بيانات أولياء الأمور", "خطة العمل", "إدارة المبادرات", "الذكاء الاصطناعي", "التقارير والإحصائيات"]
 )
+
+# إضافة التوقيع في أسفل القائمة الجانبية
+st.sidebar.markdown("---")
+st.sidebar.markdown("""
+    <div style="text-align: center; color: #94a3b8; font-size: 0.8rem; padding: 10px;">
+        تصميم وتطوير: <br>
+        <b style="color: #3b82f6; font-size: 1rem;">توفيق اليعقوبي</b>
+    </div>
+""", unsafe_allow_html=True)
 
 # --- وظائف مساعدة ---
 def load_data(table):
