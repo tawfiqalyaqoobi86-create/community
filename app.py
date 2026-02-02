@@ -142,7 +142,7 @@ st.sidebar.markdown(f"""
 
 menu = st.sidebar.radio(
     "انتقل إلى:",
-    ["لوحة التحكم", "قاعدة بيانات أولياء الأمور", "خطة العمل", "إدارة المبادرات", "الذكاء الاصطناعي", "التقارير والإحصائيات"]
+    ["لوحة التحكم", "قاعدة بيانات أولياء الأمور", "خطة العمل", "إدارة المبادرات", "الفعاليات والأنشطة", "الذكاء الاصطناعي", "التقارير والإحصائيات"]
 )
 
 # إضافة التوقيع في أسفل القائمة الجانبية
@@ -166,18 +166,60 @@ def load_data(table):
 # --- 1. لوحة التحكم ---
 if menu == "لوحة التحكم":
     st.title("📊 لوحة القيادة المجتمعية")
-    col1, col2, col3, col4 = st.columns(4)
     
-    with col1:
-        st.metric("أولياء الأمور الفاعلين", len(load_data("parents")))
-    with col2:
-        st.metric("المبادرات المنفذة", len(load_data("initiatives")))
-    with col3:
-        st.metric("الأهداف المكتملة", len(load_data("action_plan")[load_data("action_plan")['status'] == 'مكتمل']))
-    with col4:
-        st.metric("متوسط أثر المبادرات", f"{load_data('initiatives')['impact_score'].mean():.1f}/10" if not load_data('initiatives').empty else "0/10")
+    # جلب البيانات للتحليل
+    df_parents = load_data("parents")
+    df_inits = load_data("initiatives")
+    df_plan = load_data("action_plan")
 
-    st.info("مرحباً بك في نظام المساعد الرقمي. يمكنك البدء بإضافة البيانات في التبويبات الجانبية.")
+    # الصف الأول: المقاييس الأساسية (تم دمج عدد المبادرات هنا)
+    col1, col2, col3, col4 = st.columns(4)
+    with col1:
+        st.metric("أولياء الأمور المسجلين", len(df_parents))
+    with col2:
+        st.metric("المبادرات المنفذة", len(df_inits))
+    with col3:
+        st.metric("الأهداف المكتملة", len(df_plan[df_plan['status'] == 'مكتمل']))
+    with col4:
+        st.metric("متوسط أثر المبادرات", f"{df_inits['impact_score'].mean():.1f}/10" if not df_inits.empty else "0/10")
+
+    st.divider()
+
+    # الصف الثاني: الرسوم البيانية والإحصائيات
+    col_left, col_right = st.columns(2)
+    
+    with col_left:
+        st.subheader("📈 مستوى مشاركة أولياء الأمور")
+        if not df_parents.empty:
+            fig_inter = px.pie(df_parents, names='interaction_level', hole=0.4, 
+                             color_discrete_sequence=px.colors.sequential.Blues_r)
+            st.plotly_chart(fig_inter, use_container_width=True)
+        else:
+            st.info("لا توجد بيانات كافية لعرض مستوى المشاركة")
+
+    with col_right:
+        st.subheader("🤝 إحصائيات الشراكات المجتمعية")
+        if not df_parents.empty:
+            partnership_counts = df_parents['participation_type'].value_counts().reset_index()
+            partnership_counts.columns = ['نوع الشراكة', 'العدد']
+            fig_p_type = px.bar(partnership_counts, x='نوع الشراكة', y='العدد', 
+                               color='العدد', color_continuous_scale='Blues')
+            st.plotly_chart(fig_p_type, use_container_width=True)
+        else:
+            st.info("لا توجد بيانات كافية لعرض إحصائيات الشراكات")
+
+    st.divider()
+
+    # الصف الثالث: تنبيهات ومهام عاجلة
+    st.subheader("🚨 تنبيهات ومهام عاجلة")
+    # جلب المهام ذات الأولوية المرتفعة والتي لم تكتمل بعد
+    urgent_tasks = df_plan[(df_plan['priority'] == 'مرتفع') & (df_plan['status'] != 'مكتمل')]
+    
+    if not urgent_tasks.empty:
+        for _, row in urgent_tasks.iterrows():
+            st.error(f"⚠️ **مهمة عاجلة:** {row['activity']} | **المسؤول:** {row['responsibility']} | **الجدول الزمني:** {row['timeframe']}")
+    else:
+        st.success("✅ لا توجد مهام عاجلة حالياً. جميع المهام ذات الأولوية العالية مكتملة أو لا توجد مهام.")
 
 # --- 2. قاعدة بيانات أولياء الأمور ---
 elif menu == "قاعدة بيانات أولياء الأمور":
@@ -451,6 +493,97 @@ elif menu == "إدارة المبادرات":
                 st.rerun()
     else:
         st.info("لا توجد مبادرات موثقة.")
+
+# --- 5. الفعاليات والأنشطة ---
+elif menu == "الفعاليات والأنشطة":
+    st.title("🎭 الفعاليات والأنشطة")
+    
+    with st.expander("📅 إضافة/جدولة فعالية جديدة"):
+        with st.form("event_form"):
+            e_name = st.text_input("اسم الفعالية")
+            e_date = st.date_input("تاريخ الفعالية")
+            e_attendees = st.number_input("عدد الحضور المتوقع/الفعلي", min_value=0)
+            e_doc = st.text_area("توثيق الفعالية (ملاحظات/روابط صور)")
+            e_rating = st.select_slider("تقييم الفعالية", options=[1, 2, 3, 4, 5])
+            e_before = st.text_area("الوضع قبل الفعالية")
+            e_after = st.text_area("النتائج بعد الفعالية")
+            submitted = st.form_submit_button("حفظ الفعالية")
+            
+            if submitted:
+                conn = get_connection()
+                conn.execute("""INSERT INTO events 
+                             (event_name, event_date, attendees_count, documentation, rating, comparison_before, comparison_after) 
+                             VALUES (?, ?, ?, ?, ?, ?, ?)""",
+                             (e_name, e_date, e_attendees, e_doc, e_rating, e_before, e_after))
+                conn.commit()
+                conn.close()
+                
+                # حفظ سحابي
+                if conn_gs:
+                    try:
+                        new_row = {
+                            "الفعالية": e_name, "التاريخ": str(e_date), "الحضور": e_attendees, 
+                            "التوثيق": e_doc, "التقييم": e_rating, 
+                            "قبل": e_before, "بعد": e_after
+                        }
+                        try:
+                            df_gs = conn_gs.read(worksheet="Events", ttl=0)
+                            df_updated = pd.concat([df_gs, pd.DataFrame([new_row])], ignore_index=True)
+                        except:
+                            df_updated = pd.DataFrame([new_row])
+                        
+                        conn_gs.update(worksheet="Events", data=df_updated)
+                        st.success("✅ تم المزامنة مع Google Sheets (Events)")
+                    except Exception as e:
+                        st.error(f"❌ فشل المزامنة السحابية (Events): {str(e)}")
+                
+                st.success("تم حفظ الفعالية محلياً")
+
+    df_events = load_data("events")
+    
+    # زر المزامنة اليدوية للكل
+    if not df_events.empty:
+        if st.button("🔄 رفع كافة الفعاليات للسحاب", key="sync_events_all"):
+            if conn_gs:
+                try:
+                    df_to_sync = df_events.drop(columns=['id']) if 'id' in df_events.columns else df_events
+                    conn_gs.update(worksheet="Events", data=df_to_sync)
+                    st.success("✅ تمت مزامنة كافة الفعاليات مع Google Sheets")
+                except Exception as e:
+                    st.error(f"❌ فشل المزامنة: {str(e)}")
+
+    if not df_events.empty:
+        st.subheader("🗑️ إدارة الفعاليات")
+        df_events['إجراء'] = False
+        edited_df = st.data_editor(
+            df_events,
+            column_config={"إجراء": st.column_config.CheckboxColumn("حذف؟", default=False)},
+            disabled=[col for col in df_events.columns if col != "إجراء"],
+            use_container_width=True,
+            key="events_editor"
+        )
+        
+        if st.button("🔴 حذف الفعاليات المختارة", key="del_events"):
+            to_delete = edited_df[edited_df['إجراء'] == True]
+            if not to_delete.empty:
+                ids = to_delete['id'].tolist()
+                conn = get_connection()
+                for record_id in ids:
+                    conn.execute(f"DELETE FROM events WHERE id = {record_id}")
+                conn.commit()
+                conn.close()
+                
+                if conn_gs:
+                    try:
+                        df_remaining = load_data("events")
+                        df_remaining_gs = df_remaining.drop(columns=['id']) if 'id' in df_remaining.columns else df_remaining
+                        conn_gs.update(worksheet="Events", data=df_remaining_gs)
+                        st.success("✅ تم تحديث Google Sheets")
+                    except Exception as e:
+                        st.error(f"❌ فشل تحديث السحاب: {str(e)}")
+                st.rerun()
+    else:
+        st.info("لا توجد فعاليات مسجلة.")
 
 # --- 5. الذكاء الاصطناعي (التبويب الذكي) ---
 elif menu == "الذكاء الاصطناعي":
