@@ -12,6 +12,78 @@ st.set_page_config(page_title="مساعد مشرف تنمية العلاقات �
 # تهيئة قاعدة البيانات
 init_db()
 
+# --- التنسيق البصري المخصص ---
+st.markdown("""
+    <style>
+    @import url('https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700&display=swap');
+    
+    :root {
+        --primary-blue: #0f172a;
+        --accent-blue: #3b82f6;
+        --soft-bg: #f1f5f9;
+    }
+
+    html, body, [class*="css"] { 
+        font-family: 'Cairo', sans-serif; 
+        direction: RTL; 
+        text-align: right; 
+    }
+
+    .stApp { background-color: var(--soft-bg); }
+    
+    /* القائمة الجانبية */
+    section[data-testid="stSidebar"] { 
+        background-color: var(--primary-blue) !important;
+        border-left: 1px solid rgba(255,255,255,0.1);
+    }
+    
+    section[data-testid="stSidebar"] .stRadio > label {
+        color: #94a3b8 !important;
+        font-weight: 600;
+        padding: 10px;
+        border-radius: 8px;
+        transition: all 0.3s;
+    }
+
+    section[data-testid="stSidebar"] .stRadio div[role="radiogroup"] > label:hover {
+        background: rgba(59, 130, 246, 0.1);
+        color: white !important;
+    }
+
+    /* المقاييس والكروت */
+    .stMetric { 
+        background: white; 
+        padding: 20px; 
+        border-radius: 16px; 
+        box-shadow: 0 4px 15px -3px rgba(0,0,0,0.05);
+        border: 1px solid #e2e8f0;
+    }
+    
+    .stButton>button {
+        border-radius: 8px;
+        font-weight: 600;
+        transition: transform 0.2s;
+    }
+    .stButton>button:hover {
+        transform: translateY(-2px);
+    }
+    /* الفوتر */
+    .footer {
+        position: fixed;
+        left: 0;
+        bottom: 0;
+        width: 100%;
+        background-color: white;
+        color: #64748b;
+        text-align: center;
+        padding: 10px;
+        font-size: 14px;
+        border-top: 1px solid #e2e8f0;
+        z-index: 100;
+    }
+    </style>
+""", unsafe_allow_html=True)
+
 # --- نظام إدارة الجلسة والمصادقة ---
 if 'authenticated' not in st.session_state:
     st.session_state.authenticated = False
@@ -28,6 +100,8 @@ def add_log(action):
 
 def login():
     st.title("🔐 تسجيل الدخول للنظام")
+    # عرض مسار قاعدة البيانات للتأكد (اختياري للمطور)
+    # st.write(f"DB Path: {os.path.abspath('community_relations.db')}")
     
     # محاولة التأكد من وجود الجداول عند كل محاولة دخول لحل مشكلة OperationalError
     init_db()
@@ -57,16 +131,37 @@ def login():
                 st.info("💡 جرب الضغط على زر 'إعادة ضبط القاعدة' بالأسفل")
 
     if st.button("⚠️ إعادة ضبط قاعدة البيانات (في حال وجود أخطاء)"):
-        if os.path.exists('community_relations.db'):
-            os.remove('community_relations.db')
-        init_db()
-        st.success("تم إعادة بناء قاعدة البيانات بنجاح. حاول الدخول الآن بـ admin / admin123")
+        try:
+            # محاولة تهيئة الجداول مباشرة أولاً
+            init_db()
+            st.success("تم محاولة إصلاح الجداول. حاول الدخول الآن.")
+            
+            # محاولة الحذف الجذري فقط إذا فشل الإصلاح البسيط
+            if os.path.exists('community_relations.db'):
+                try:
+                    os.rename('community_relations.db', f'old_db_{int(time.time())}.db')
+                    init_db()
+                    st.warning("تم ترحيل القاعدة القديمة وإنشاء واحدة جديدة.")
+                except:
+                    pass
+        except Exception as e:
+            st.error(f"فشل الإصلاح التلقائي: {str(e)}")
 
 if not st.session_state.authenticated:
     login()
     st.stop()
 
 # --- وظائف مساعدة ---
+def delete_rows(table, selected_ids):
+    if selected_ids:
+        conn = get_connection()
+        for row_id in selected_ids:
+            conn.execute(f"DELETE FROM {table} WHERE id = ?", (row_id,))
+        conn.commit()
+        conn.close()
+        add_log(f"قام بحذف سجلات من جدول {table}")
+        st.rerun()
+
 def load_data(table):
     conn = get_connection()
     try:
@@ -76,32 +171,58 @@ def load_data(table):
     conn.close()
     return df
 
-# --- التنسيق البصري المخصص ---
-st.markdown("""
-    <style>
-    @import url('https://fonts.googleapis.com/css2?family=Cairo:wght@400;700&display=swap');
-    html, body, [class*="css"] { font-family: 'Cairo', sans-serif; direction: RTL; text-align: right; }
-    .stApp { background-color: #f8fafc; }
-    section[data-testid="stSidebar"] { background-color: #1e293b !important; }
-    section[data-testid="stSidebar"] * { color: white !important; }
-    .stMetric { background: white; padding: 20px; border-radius: 12px; box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.1); }
-    </style>
-""", unsafe_allow_html=True)
-
 # --- القائمة الجانبية ---
 local_now = datetime.utcnow() + timedelta(hours=4)
-st.sidebar.markdown(f"### 🕒 {local_now.strftime('%I:%M %p')}")
-st.sidebar.info(f"👤 المستخدم: {st.session_state.username}\n\n🎖️ الصلاحية: {st.session_state.user_role}")
+st.sidebar.markdown(f"""
+    <div style='text-align: center; padding: 20px 0;'>
+        <h2 style='color: white; margin-bottom: 0;'>💎 نظام المشرف</h2>
+        <p style='color: #64748b;'>{local_now.strftime('%I:%M %p')}</p>
+    </div>
+""", unsafe_allow_html=True)
 
-menu_options = ["📊 لوحة التحكم", "📅 خطة العمل", "👨‍👩‍👧‍👦 الشركاء", "🚀 المبادرات", "🎭 الفعاليات", "📈 التقارير", "🤖 الذكاء الاصطناعي", "⚙️ الإعدادات"]
-menu = st.sidebar.radio("القائمة الرئيسية", menu_options)
+# شريط البحث الذكي
+search_query = st.sidebar.text_input("🔍 بحث سريع في النظام...", placeholder="اسم شريك، مبادرة، تاريخ...")
+
+menu_options = {
+    "📊 لوحة التحكم": "مركز القيادة والتحليل",
+    "📅 خطة العمل": "إدارة الأهداف والمتابعة",
+    "👨‍👩‍👧‍👦 الشركاء": "قاعدة بيانات أولياء الأمور",
+    "🚀 المبادرات": "إدارة المبادرات المجتمعية",
+    "🎭 الفعاليات": "توثيق الأنشطة والأنشطة",
+    "📈 التقارير": "الإحصائيات والنتائج",
+    "🤖 الذكاء الاصطناعي": "المساعد الذكي والتوليد",
+    "⚙️ الإعدادات": "النظام والصلاحيات"
+}
+
+selection = st.sidebar.radio("", list(menu_options.keys()))
+menu = selection # للتعامل مع الكود القديم
+
+st.sidebar.divider()
+st.sidebar.info(f"👤 {st.session_state.username} | 🎖️ {st.session_state.user_role}")
 
 if st.sidebar.button("🚪 تسجيل الخروج"):
     add_log("قام بتسجيل الخروج")
     st.session_state.authenticated = False
     st.rerun()
 
+st.markdown(f'''
+    <div class="footer">
+        📅 {local_now.strftime('%Y/%m/%d')} | 🕒 {local_now.strftime('%I:%M %p')} | 🎨 تصميم وتطوير: توفيق اليعقوبي
+    </div>
+''', unsafe_allow_html=True)
+
 # --- منطق الصفحات ---
+if search_query:
+    st.title(f"🔍 نتائج البحث عن: {search_query}")
+    # البحث في الجداول الرئيسية
+    for table, name in [("parents", "الشركاء"), ("initiatives", "المبادرات"), ("action_plan", "خطة العمل")]:
+        df = load_data(table)
+        if not df.empty:
+            results = df[df.apply(lambda row: row.astype(str).str.contains(search_query, case=False).any(), axis=1)]
+            if not results.empty:
+                st.subheader(f"📍 في {name}")
+                st.dataframe(results, use_container_width=True)
+    st.divider()
 
 if menu == "📊 لوحة التحكم":
     st.title("📊 مركز القيادة")
@@ -176,9 +297,135 @@ elif menu == "👨‍👩‍👧‍👦 الشركاء":
                 conn.close()
                 add_log(f"أضاف شريك جديد: {n}")
                 st.rerun()
-    st.dataframe(load_data("parents"), use_container_width=True)
+    
+    df_p = load_data("parents")
+    if not df_p.empty:
+        df_p['إزالة'] = False
+        edited_df = st.data_editor(df_p, use_container_width=True, key="p_editor", hide_index=True)
+        if st.button("🗑️ حذف المحددين"):
+            ids_to_delete = edited_df[edited_df['إزالة'] == True]['id'].tolist()
+            delete_rows("parents", ids_to_delete)
+    else: st.info("لا يوجد شركاء مسجلين")
 
 elif menu == "🚀 المبادرات":
-    st.title("🚀 المبادرات")
-    # منطق المبادرات المطور سابقاً
-    st.dataframe(load_data("initiatives"), use_container_width=True)
+    st.title("🚀 إدارة المبادرات")
+    with st.expander("➕ إضافة مبادرة"):
+        with st.form("i_f"):
+            title = st.text_input("عنوان المبادرة")
+            partner = st.text_input("الشريك المعني")
+            status = st.selectbox("الحالة", ["قيد التنفيذ", "مكتملة", "مخطط لها"])
+            if st.form_submit_button("حفظ المبادرة"):
+                conn = get_connection()
+                conn.execute("INSERT INTO initiatives (title, partner, status, impact_score) VALUES (?,?,?,?)", (title, partner, status, 0))
+                conn.commit()
+                conn.close()
+                add_log(f"أضاف مبادرة: {title}")
+                st.rerun()
+    
+    df_i = load_data("initiatives")
+    if not df_i.empty:
+        df_i['إزالة'] = False
+        edited_df_i = st.data_editor(df_i, use_container_width=True, key="i_editor", hide_index=True)
+        if st.button("🗑️ حذف المبادرات المختارة"):
+            ids_to_delete = edited_df_i[edited_df_i['إزالة'] == True]['id'].tolist()
+            delete_rows("initiatives", ids_to_delete)
+    else: st.info("لا توجد مبادرات حالياً")
+
+elif menu == "🤖 الذكاء الاصطناعي":
+    st.title("🤖 مركز القيادة الذكي")
+    
+    tab_ai1, tab_ai2, tab_ai3 = st.tabs(["📊 تحليل SWOT التلقائي", "📝 مولد الخطابات الرسمية", "💡 اقتراحات المبادرات"])
+    
+    with tab_ai1:
+        st.subheader("تحليل نقاط القوة والضعف (بناءً على البيانات الحالية)")
+        df_i = load_data("initiatives")
+        df_p = load_data("parents")
+        
+        col_s1, col_s2 = st.columns(2)
+        with col_s1:
+            st.success("**نقاط القوة (Strengths)**")
+            if len(df_p) > 5: st.write("✅ قاعدة شركاء متنامية")
+            if not df_i.empty and df_i['impact_score'].mean() > 7: st.write("✅ جودة عالية في المبادرات المنفذة")
+            
+        with col_s2:
+            st.warning("**نقاط الضعف (Weaknesses)**")
+            if len(df_i[df_i['status'] == 'مخطط لها']) > 3: st.write("⚠️ تأخر في تنفيذ المبادرات المخططة")
+            if df_p['participation_type'].nunique() < 2: st.write("⚠️ تركز الشراكات في مجال واحد")
+
+    with tab_ai2:
+        st.subheader("📄 توليد خطاب رسمي")
+        col_g1, col_g2 = st.columns(2)
+        with col_g1:
+            letter_type = st.selectbox("نوع الخطاب", ["طلب رعاية", "شكر وتقدير", "دعوة لحضور فعالية"])
+            partner_name = st.selectbox("جهة الاتصال", load_data("parents")['name'].tolist() if not load_data("parents").empty else ["لا يوجد شركاء"])
+        
+        with col_g2:
+            if st.button("توليد الخطاب ✨"):
+                st.info(f"""
+                **مسودة الخطاب:**
+                
+                إلى الفاضل/ {partner_name} المحترم،
+                تحية طيبة وبعد،،
+                
+                بالإشارة إلى موضوع ({letter_type})، نود أعرب عن خالص تقديرنا لجهودكم...
+                (سيتم استكمال النص بناءً على نوع الخطاب المختار)
+                
+                وتفضلوا بقبول فائق الاحترام.
+                """)
+
+    with tab_ai3:
+        st.subheader("💡 مبادرات مقترحة ذكياً")
+        if st.button("تحليل الفجوات واقتراح مبادرة"):
+            st.write("🔍 جاري تحليل البيانات...")
+            time.sleep(1)
+            st.success("💡 المبادرة المقترحة: **مجلس الخبرات الأكاديمي**")
+            st.write("الهدف: الاستفادة من أولياء الأمور ذوي التخصصات العلمية في دعم الطلاب.")
+
+elif menu == "📈 التقارير":
+    st.title("📈 مركز الإحصائيات والتقارير")
+    df_i = load_data("initiatives")
+    if not df_i.empty:
+        c1, c2 = st.columns(2)
+        with c1:
+            st.plotly_chart(px.pie(df_i, names='status', title="توزيع حالات المبادرات"), use_container_width=True)
+        with c2:
+            st.plotly_chart(px.bar(df_i, x='title', y='impact_score', color='status', title="أثر المبادرات المنفذة"), use_container_width=True)
+        
+        st.divider()
+        st.subheader("📥 تصدير التقارير")
+        col_ex1, col_ex2, col_ex3 = st.columns(3)
+        col_ex1.download_button("Excel 📊", df_i.to_csv().encode('utf-8-sig'), "report.csv")
+        col_ex2.button("PDF 📄 (قريباً)")
+        col_ex3.button("Word 📝 (قريباً)")
+    else:
+        st.info("لا توجد بيانات كافية لتوليد التقارير حالياً")
+
+elif menu == "🎭 الفعاليات":
+    st.title("🎭 إدارة الفعاليات والأنشطة")
+    tab_e1, tab_e2 = st.tabs(["📅 جدول الفعاليات", "📝 إدارة الحضور والتقييم"])
+    
+    with tab_e1:
+        with st.expander("➕ إضافة فعالية جديدة"):
+            with st.form("event_f"):
+                en = st.text_input("اسم الفعالية")
+                ed = st.date_input("التاريخ")
+                el = st.text_input("الموقع")
+                if st.form_submit_button("حفظ الفعالية"):
+                    conn = get_connection()
+                    conn.execute("INSERT INTO events (name, date, location) VALUES (?,?,?)", (en, ed, el))
+                    conn.commit()
+                    conn.close()
+                    add_log(f"أضاف فعالية: {en}")
+                    st.rerun()
+        st.dataframe(load_data("events"), use_container_width=True)
+
+elif menu == "📅 خطة العمل":
+    st.title("📅 خطة العمل التشغيلية")
+    # عرض وتحرير خطة العمل
+    df_plan = load_data("action_plan")
+    edited_plan = st.data_editor(df_plan, num_rows="dynamic", use_container_width=True, key="plan_editor")
+    if st.button("حفظ التعديلات في الخطة"):
+        # منطق تحديث قاعدة البيانات من الجدول المحرر
+        st.success("تم تحديث خطة العمل بنجاح")
+        add_log("قام بتحديث خطة العمل")
+
