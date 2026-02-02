@@ -84,72 +84,28 @@ st.markdown("""
     </style>
 """, unsafe_allow_html=True)
 
-# --- نظام إدارة الجلسة والمصادقة ---
+# --- نظام إدارة الجلسة والمصادقة (تم إلغاء القفل للدخول المباشر) ---
 if 'authenticated' not in st.session_state:
-    st.session_state.authenticated = False
+    st.session_state.authenticated = True
 if 'user_role' not in st.session_state:
-    st.session_state.user_role = None
+    st.session_state.user_role = "مدير"
 if 'username' not in st.session_state:
-    st.session_state.username = None
+    st.session_state.username = "المشرف"
 
 def add_log(action):
-    conn = get_connection()
-    conn.execute("INSERT INTO logs (user, action) VALUES (?, ?)", (st.session_state.username, action))
-    conn.commit()
-    conn.close()
+    try:
+        conn = get_connection()
+        conn.execute("INSERT INTO logs (user, action) VALUES (?, ?)", (st.session_state.username, action))
+        conn.commit()
+        conn.close()
+    except: pass
 
 def login():
-    st.title("🔐 تسجيل الدخول للنظام")
-    # عرض مسار قاعدة البيانات للتأكد (اختياري للمطور)
-    # st.write(f"DB Path: {os.path.abspath('community_relations.db')}")
-    
-    # محاولة التأكد من وجود الجداول عند كل محاولة دخول لحل مشكلة OperationalError
-    init_db()
-    
-    with st.form("login_form"):
-        u = st.text_input("اسم المستخدم")
-        p = st.text_input("كلمة المرور", type="password")
-        col_l1, col_l2 = st.columns([1, 1])
-        with col_l1:
-            submit = st.form_submit_button("دخول")
-        
-        if submit:
-            try:
-                conn = get_connection()
-                user = conn.execute("SELECT role FROM users WHERE username=? AND password=?", (u, p)).fetchone()
-                conn.close()
-                if user:
-                    st.session_state.authenticated = True
-                    st.session_state.username = u
-                    st.session_state.user_role = user[0]
-                    add_log("قام بتسجيل الدخول")
-                    st.rerun()
-                else:
-                    st.error("خطأ في بيانات الدخول")
-            except Exception as e:
-                st.error(f"حدث خطأ في قاعدة البيانات: {str(e)}")
-                st.info("💡 جرب الضغط على زر 'إعادة ضبط القاعدة' بالأسفل")
+    pass # تم تعطيله بناء على طلب المستخدم
 
-    if st.button("⚠️ إعادة ضبط قاعدة البيانات (في حال وجود أخطاء)"):
-        try:
-            # محاولة تهيئة الجداول مباشرة أولاً
-            init_db()
-            st.success("تم محاولة إصلاح الجداول. حاول الدخول الآن.")
-            
-            # محاولة الحذف الجذري فقط إذا فشل الإصلاح البسيط
-            if os.path.exists('community_relations.db'):
-                try:
-                    os.rename('community_relations.db', f'old_db_{int(time.time())}.db')
-                    init_db()
-                    st.warning("تم ترحيل القاعدة القديمة وإنشاء واحدة جديدة.")
-                except:
-                    pass
-        except Exception as e:
-            st.error(f"فشل الإصلاح التلقائي: {str(e)}")
-
-if not st.session_state.authenticated:
-    login()
-    st.stop()
+# if not st.session_state.authenticated:
+#    login()
+#    st.stop()
 
 # --- وظائف مساعدة ---
 def delete_rows(table, selected_ids):
