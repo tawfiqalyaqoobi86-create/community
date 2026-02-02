@@ -131,14 +131,11 @@ st.markdown("""
     </style>
     """, unsafe_allow_html=True)
 
-# العنوان الجانبي
-st.sidebar.title("🗂️ القائمة الرئيسية")
-
-# إضافة التاريخ والساعة الحالية (توقيت محلي UTC+3)
-local_now = datetime.utcnow() + timedelta(hours=3)
+# إضافة التاريخ والساعة الحالية (توقيت سلطنة عمان UTC+4)
+local_now = datetime.utcnow() + timedelta(hours=4)
 st.sidebar.markdown(f"""
     <div style="text-align: center; padding: 10px; border-bottom: 1px solid #334155; margin-bottom: 20px;">
-        <p style="color: #60a5fa; margin: 0; font-size: 1.2rem; font-weight: 700;">🕒 {local_now.strftime('%H:%M:%S')}</p>
+        <p style="color: #60a5fa; margin: 0; font-size: 1.5rem; font-weight: 700;">🕒 {local_now.strftime('%I:%M %p')}</p>
         <p style="color: #94a3b8; margin: 0; font-size: 0.8rem;">📅 {local_now.strftime('%Y-%m-%d')}</p>
     </div>
 """, unsafe_allow_html=True)
