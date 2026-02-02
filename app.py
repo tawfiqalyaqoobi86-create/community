@@ -147,23 +147,28 @@ if menu == "📊 لوحة التحكم":
     df_pl = load_data("action_plan")
     
     c1, c2, c3, c4 = st.columns(4)
-    c1.metric("الشركاء", len(df_p))
-    c2.metric("المبادرات", len(df_i))
+    c1.metric("الشركاء المسجلين", len(df_p))
+    c2.metric("المبادرات المنفذة", len(df_i))
     c3.metric("أهداف محققة", len(df_pl[df_pl['status'] == 'مكتمل']) if not df_pl.empty else 0)
-    c4.metric("متوسط الأثر", f"{df_i['impact_score'].mean():.1f}" if not df_i.empty else "0.0")
+    c4.metric("متوسط الأثر", f"{df_i['impact_score'].mean():.1f}" if not df_i.empty and 'impact_score' in df_i.columns else "0.0")
     
     st.divider()
     col_l, col_r = st.columns(2)
     with col_l:
         st.subheader("📈 تفاعل الشركاء")
-        if not df_p.empty:
+        if not df_p.empty and 'interaction_level' in df_p.columns:
             st.plotly_chart(px.pie(df_p, names='interaction_level', hole=0.4, color_discrete_sequence=px.colors.sequential.Blues_r), use_container_width=True)
+        else:
+            st.info("لا توجد بيانات تفاعل كافية")
     with col_r:
         st.subheader("🚨 مهام عاجلة")
-        urgent = df_pl[(df_pl['priority'] == 'مرتفع') & (df_pl['status'] != 'مكتمل')] if not df_pl.empty else pd.DataFrame()
-        if not urgent.empty:
-            for _, r in urgent.iterrows(): st.error(f"⚠️ {r['activity']}")
-        else: st.success("لا توجد مهام متأخرة")
+        if not df_pl.empty and 'priority' in df_pl.columns and 'status' in df_pl.columns:
+            urgent = df_pl[(df_pl['priority'] == 'مرتفع') & (df_pl['status'] != 'مكتمل')]
+            if not urgent.empty:
+                for _, r in urgent.iterrows(): st.error(f"⚠️ {r['activity']}")
+            else: st.success("لا توجد مهام متأخرة")
+        else:
+            st.success("لا توجد مهام مسجلة")
 
 elif menu == "📅 خطة العمل":
     st.title("📅 خطة العمل السنوية")
@@ -172,16 +177,29 @@ elif menu == "📅 خطة العمل":
             obj = st.text_input("الهدف")
             act = st.text_input("النشاط")
             resp = st.text_input("المسؤول")
+            timeframe = st.text_input("الجدول الزمني")
+            kpi = st.text_input("مؤشر الأداء (KPI)")
             prio = st.selectbox("الأولوية", ["مرتفع", "متوسط", "منخفض"])
             if st.form_submit_button("حفظ"):
                 conn = get_connection()
-                conn.execute("INSERT INTO action_plan (objective, activity, responsibility, priority, status) VALUES (?,?,?,?,'قيد التنفيذ')", (obj,act,resp,prio))
+                conn.execute("INSERT INTO action_plan (objective, activity, responsibility, timeframe, kpi, priority, status) VALUES (?,?,?,?,?,?,'قيد التنفيذ')", 
+                             (obj, act, resp, timeframe, kpi, prio))
                 conn.commit(); conn.close()
+                st.success("تم الحفظ بنجاح")
                 st.rerun()
     
     df_pl = load_data("action_plan")
     if not df_pl.empty:
-        st.data_editor(df_pl.drop(columns=['id']), use_container_width=True)
+        st.subheader("📋 بنود الخطة")
+        df_pl['حذف'] = False
+        edited_df = st.data_editor(df_pl, key="plan_edit", use_container_width=True)
+        if st.button("🔴 حذف المحدد من الخطة"):
+            to_del = edited_df[edited_df['حذف'] == True]
+            if not to_del.empty:
+                conn = get_connection()
+                for rid in to_del['id']: conn.execute(f"DELETE FROM action_plan WHERE id={rid}")
+                conn.commit(); conn.close()
+                st.rerun()
 
 elif menu == "👨‍👩‍👧‍👦 الشركاء وأولياء الأمور":
     st.title("👨‍👩‍👧‍👦 إدارة الشركاء الاستراتيجيين")
@@ -190,71 +208,124 @@ elif menu == "👨‍👩‍👧‍👦 الشركاء وأولياء الأمو
     with st.expander("➕ تسجيل شريك جديد"):
         with st.form("p_f"):
             name = st.text_input("الاسم")
-            type_p = st.selectbox("مجال الشراكة", ["تعليمي", "مهني", "تطوعي", "مالي"])
-            exp = st.text_input("الخبرة/المجال")
+            type_p = st.selectbox("مجال الشراكة", ["دعم تعليمي", "دعم مالي", "خبرات مهنية", "تطوع", "مبادرات"])
+            exp = st.text_input("المجال / الخبرة التخصصية")
+            level = st.selectbox("مستوى التفاعل المتوقع", ["مرتفع", "متوسط", "محدود"])
             if st.form_submit_button("إضافة شريك"):
                 conn = get_connection()
-                conn.execute("INSERT INTO parents (name, participation_type, expertise, interaction_level) VALUES (?,?,?,'متوسط')", (name, type_p, exp))
+                conn.execute("INSERT INTO parents (name, participation_type, expertise, interaction_level) VALUES (?,?,?,?)", (name, type_p, exp, level))
                 conn.commit(); conn.close()
+                st.success("تم تسجيل الشريك بنجاح")
                 st.rerun()
 
     df_p = load_data("parents")
     if not df_p.empty:
+        st.subheader("🔍 استعراض الشركاء والربط الذكي")
+        df_p['حذف'] = False
+        edited_p = st.data_editor(df_p, key="p_edit", use_container_width=True)
+        if st.button("🔴 حذف المحدد من الشركاء"):
+            to_del = edited_p[edited_p['حذف'] == True]
+            if not to_del.empty:
+                conn = get_connection()
+                for rid in to_del['id']: conn.execute(f"DELETE FROM parents WHERE id={rid}")
+                conn.commit(); conn.close()
+                st.rerun()
+        
+        st.divider()
         for _, row in df_p.iterrows():
             with st.container():
                 cl1, cl2 = st.columns([1, 2])
                 cl1.markdown(f"### 👤 {row['name']}")
                 cl1.caption(f"🛡️ {row['participation_type']} | {row['expertise']}")
-                # الربط الذكي مع المبادرات
-                if 'partner' in df_i.columns:
+                if not df_i.empty and 'partner' in df_i.columns:
                     linked = df_i[df_i['partner'] == row['name']]
                     if not linked.empty:
                         cl2.write("**🚀 المبادرات المرتبطة:**")
-                        for _, li in linked.iterrows(): cl2.info(f"🔹 {li['title']}")
+                        for _, li in linked.iterrows(): cl2.info(f"🔹 {li['title']} ({li['status']})")
+                    else:
+                        cl2.write("➖ لا توجد مبادرات مرتبطة حالياً")
                 st.divider()
 
 elif menu == "🚀 إدارة المبادرات":
     st.title("🚀 توثيق وإدارة المبادرات")
     df_p = load_data("parents")
     
-    with st.expander("➕ توثيق مبادرة"):
+    with st.expander("➕ توثيق مبادرة جديدة"):
         with st.form("i_f"):
             title = st.text_input("عنوان المبادرة")
             partner = st.selectbox("الشريك المرتبط", ["بدون شريك"] + df_p['name'].tolist()) if not df_p.empty else st.text_input("الشريك")
-            status = st.selectbox("الحالة", ["قيد التنفيذ", "مكتملة", "مخطط لها"])
-            impact = st.slider("الأثر", 1, 10, 5)
-            if st.form_submit_button("توثيق"):
+            desc = st.text_area("وصف المبادرة وأهدافها")
+            status = st.selectbox("الحالة الحالية", ["مخطط لها", "قيد التنفيذ", "مكتملة"])
+            impact = st.slider("مستوى الأثر (1-10)", 1, 10, 5)
+            if st.form_submit_button("حفظ المبادرة"):
                 conn = get_connection()
-                try: conn.execute("INSERT INTO initiatives (title, partner, status, impact_score) VALUES (?,?,?,?)", (title, partner, status, impact))
-                except:
-                    conn.execute("ALTER TABLE initiatives ADD COLUMN partner TEXT")
-                    conn.execute("INSERT INTO initiatives (title, partner, status, impact_score) VALUES (?,?,?,?)", (title, partner, status, impact))
+                conn.execute("INSERT INTO initiatives (title, partner, description, status, impact_score) VALUES (?,?,?,?,?)", 
+                             (title, partner, desc, status, impact))
                 conn.commit(); conn.close()
+                st.success("تم التوثيق والربط بنجاح")
                 st.rerun()
     
     df_i = load_data("initiatives")
     if not df_i.empty:
-        st.dataframe(df_i.drop(columns=['id']), use_container_width=True)
+        st.subheader("📋 سجل المبادرات")
+        df_i['حذف'] = False
+        edited_i = st.data_editor(df_i, key="i_edit", use_container_width=True)
+        if st.button("🔴 حذف المبادرات المحددة"):
+            to_del = edited_i[edited_i['حذف'] == True]
+            if not to_del.empty:
+                conn = get_connection()
+                for rid in to_del['id']: conn.execute(f"DELETE FROM initiatives WHERE id={rid}")
+                conn.commit(); conn.close()
+                st.rerun()
 
 elif menu == "🎭 الفعاليات والأنشطة":
-    st.title("🎭 إدارة الفعاليات")
+    st.title("🎭 إدارة الفعاليات والأنشطة")
+    with st.expander("🗓️ إضافة فعالية جديدة"):
+        with st.form("e_f"):
+            en = st.text_input("اسم الفعالية")
+            ed = st.date_input("التاريخ")
+            el = st.text_input("المكان")
+            at = st.number_input("عدد الحضور المتوقع", 0)
+            if st.form_submit_button("إضافة للجدول"):
+                conn = get_connection()
+                conn.execute("INSERT INTO events (name, date, location, attendees_count) VALUES (?,?,?,?)", (en, str(ed), el, at))
+                conn.commit(); conn.close()
+                st.rerun()
+    
     df_e = load_data("events")
-    with st.form("e_f"):
-        en = st.text_input("اسم الفعالية")
-        ed = st.date_input("التاريخ")
-        if st.form_submit_button("إضافة"):
-            conn = get_connection()
-            conn.execute("INSERT INTO events (name, date) VALUES (?,?)", (en, str(ed)))
-            conn.commit(); conn.close()
-            st.rerun()
-    st.dataframe(df_e, use_container_width=True)
+    if not df_e.empty:
+        st.subheader("🗓️ جدول الفعاليات")
+        df_e['حذف'] = False
+        edited_e = st.data_editor(df_e, key="e_edit", use_container_width=True)
+        if st.button("🔴 حذف الفعاليات المحددة"):
+            to_del = edited_e[edited_e['حذف'] == True]
+            if not to_del.empty:
+                conn = get_connection()
+                for rid in to_del['id']: conn.execute(f"DELETE FROM events WHERE id={rid}")
+                conn.commit(); conn.close()
+                st.rerun()
 
 elif menu == "📈 التقارير والإحصائيات":
-    st.title("📈 مركز التقارير")
+    st.title("📈 مركز التقارير والتحليلات")
     df_i = load_data("initiatives")
+    
     if not df_i.empty:
-        st.plotly_chart(px.bar(df_i, x='title', y='impact_score', color='status', title="أثر المبادرات المنفذة"), use_container_width=True)
-    else: st.info("لا توجد بيانات كافية")
+        col_c1, col_c2 = st.columns(2)
+        with col_c1:
+            st.subheader("📊 أثر المبادرات")
+            if 'title' in df_i.columns and 'impact_score' in df_i.columns:
+                fig = px.bar(df_i, x='title', y='impact_score', color='status' if 'status' in df_i.columns else None,
+                             title="توزيع أثر المبادرات", 
+                             color_discrete_sequence=px.colors.qualitative.Safe)
+                st.plotly_chart(fig, use_container_width=True)
+        
+        with col_c2:
+            st.subheader("📋 توزيع الحالات")
+            if 'status' in df_i.columns:
+                fig_pie = px.pie(df_i, names='status', hole=0.3, title="نسبة إنجاز المبادرات")
+                st.plotly_chart(fig_pie, use_container_width=True)
+    else:
+        st.info("لا توجد بيانات مبادرات كافية لتوليد التقارير")
 
 elif menu == "🤖 الذكاء الاصطناعي":
     st.title("🤖 مساعد الذكاء الاصطناعي")
