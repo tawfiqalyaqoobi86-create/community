@@ -185,6 +185,18 @@ elif menu == "📅 خطة العمل":
                 conn.execute("INSERT INTO action_plan (objective, activity, responsibility, timeframe, kpi, priority, status) VALUES (?,?,?,?,?,?,'قيد التنفيذ')", 
                              (obj, act, resp, timeframe, kpi, prio))
                 conn.commit(); conn.close()
+                
+                # مزامنة سحابية
+                if conn_gs:
+                    try:
+                        new_data = pd.DataFrame([{"الهدف": obj, "النشاط": act, "المسؤول": resp, "الزمن": timeframe, "KPI": kpi, "الأولوية": prio, "الحالة": "قيد التنفيذ"}])
+                        try:
+                            existing = conn_gs.read(worksheet="ActionPlan", ttl=0)
+                            updated = pd.concat([existing, new_data], ignore_index=True)
+                        except: updated = new_data
+                        conn_gs.update(worksheet="ActionPlan", data=updated)
+                    except: pass
+                
                 st.success("تم الحفظ بنجاح")
                 st.rerun()
     
@@ -199,6 +211,13 @@ elif menu == "📅 خطة العمل":
                 conn = get_connection()
                 for rid in to_del['id']: conn.execute(f"DELETE FROM action_plan WHERE id={rid}")
                 conn.commit(); conn.close()
+                
+                # تحديث السحاب
+                if conn_gs:
+                    try:
+                        remaining = load_data("action_plan")
+                        conn_gs.update(worksheet="Plan", data=remaining.drop(columns=['id', 'حذف'], errors='ignore'))
+                    except: pass
                 st.rerun()
 
 elif menu == "👨‍👩‍👧‍👦 الشركاء وأولياء الأمور":
@@ -215,6 +234,18 @@ elif menu == "👨‍👩‍👧‍👦 الشركاء وأولياء الأمو
                 conn = get_connection()
                 conn.execute("INSERT INTO parents (name, participation_type, expertise, interaction_level) VALUES (?,?,?,?)", (name, type_p, exp, level))
                 conn.commit(); conn.close()
+                
+                # مزامنة سحابية
+                if conn_gs:
+                    try:
+                        new_data = pd.DataFrame([{"الاسم": name, "النوع": type_p, "الخبرة": exp, "التفاعل": level, "التاريخ": str(datetime.now())}])
+                        try:
+                            existing = conn_gs.read(worksheet="Parents", ttl=0)
+                            updated = pd.concat([existing, new_data], ignore_index=True)
+                        except: updated = new_data
+                        conn_gs.update(worksheet="Parents", data=updated)
+                    except: pass
+                
                 st.success("تم تسجيل الشريك بنجاح")
                 st.rerun()
 
@@ -229,6 +260,13 @@ elif menu == "👨‍👩‍👧‍👦 الشركاء وأولياء الأمو
                 conn = get_connection()
                 for rid in to_del['id']: conn.execute(f"DELETE FROM parents WHERE id={rid}")
                 conn.commit(); conn.close()
+                
+                # تحديث السحاب
+                if conn_gs:
+                    try:
+                        remaining = load_data("parents")
+                        conn_gs.update(worksheet="Parents", data=remaining.drop(columns=['id', 'حذف'], errors='ignore'))
+                    except: pass
                 st.rerun()
         
         st.divider()
@@ -262,6 +300,18 @@ elif menu == "🚀 إدارة المبادرات":
                 conn.execute("INSERT INTO initiatives (title, partner, description, status, impact_score) VALUES (?,?,?,?,?)", 
                              (title, partner, desc, status, impact))
                 conn.commit(); conn.close()
+                
+                # مزامنة سحابية
+                if conn_gs:
+                    try:
+                        new_data = pd.DataFrame([{"العنوان": title, "الشريك": partner, "الوصف": desc, "الحالة": status, "الأثر": impact, "التاريخ": str(datetime.now())}])
+                        try:
+                            existing = conn_gs.read(worksheet="Initiatives", ttl=0)
+                            updated = pd.concat([existing, new_data], ignore_index=True)
+                        except: updated = new_data
+                        conn_gs.update(worksheet="Initiatives", data=updated)
+                    except: pass
+                
                 st.success("تم التوثيق والربط بنجاح")
                 st.rerun()
     
@@ -276,6 +326,13 @@ elif menu == "🚀 إدارة المبادرات":
                 conn = get_connection()
                 for rid in to_del['id']: conn.execute(f"DELETE FROM initiatives WHERE id={rid}")
                 conn.commit(); conn.close()
+                
+                # تحديث السحاب
+                if conn_gs:
+                    try:
+                        remaining = load_data("initiatives")
+                        conn_gs.update(worksheet="Initiatives", data=remaining.drop(columns=['id', 'حذف'], errors='ignore'))
+                    except: pass
                 st.rerun()
 
 elif menu == "🎭 الفعاليات والأنشطة":
@@ -290,6 +347,18 @@ elif menu == "🎭 الفعاليات والأنشطة":
                 conn = get_connection()
                 conn.execute("INSERT INTO events (name, date, location, attendees_count) VALUES (?,?,?,?)", (en, str(ed), el, at))
                 conn.commit(); conn.close()
+                
+                # مزامنة سحابية
+                if conn_gs:
+                    try:
+                        new_data = pd.DataFrame([{"الفعالية": en, "التاريخ": str(ed), "المكان": el, "الحضور": at}])
+                        try:
+                            existing = conn_gs.read(worksheet="Events", ttl=0)
+                            updated = pd.concat([existing, new_data], ignore_index=True)
+                        except: updated = new_data
+                        conn_gs.update(worksheet="Events", data=updated)
+                    except: pass
+                
                 st.rerun()
     
     df_e = load_data("events")
@@ -303,6 +372,13 @@ elif menu == "🎭 الفعاليات والأنشطة":
                 conn = get_connection()
                 for rid in to_del['id']: conn.execute(f"DELETE FROM events WHERE id={rid}")
                 conn.commit(); conn.close()
+                
+                # تحديث السحاب
+                if conn_gs:
+                    try:
+                        remaining = load_data("events")
+                        conn_gs.update(worksheet="Events", data=remaining.drop(columns=['id', 'حذف'], errors='ignore'))
+                    except: pass
                 st.rerun()
 
 elif menu == "📈 التقارير والإحصائيات":
@@ -328,10 +404,42 @@ elif menu == "📈 التقارير والإحصائيات":
         st.info("لا توجد بيانات مبادرات كافية لتوليد التقارير")
 
 elif menu == "🤖 الذكاء الاصطناعي":
-    st.title("🤖 مساعد الذكاء الاصطناعي")
-    st.info("سيتم هنا تحليل البيانات واقتراح الخطابات الرسمية بناءً على سجل الشركاء والمبادرات.")
-    # (المنطق الذي أضفناه سابقاً سيبقى هنا)
-    st.subheader("✉️ مولد الخطابات الذكي")
-    p_name = st.selectbox("اختر الشريك", load_data("parents")['name'].tolist()) if not load_data("parents").empty else "فلان"
-    if st.button("توليد خطاب شكر"):
-        st.code(f"نص الخطاب: نشكر الأستاذ {p_name} على جهوده المتميزة...")
+    st.title("🤖 مركز الذكاء الاصطناعي الاستراتيجي")
+    
+    tab_gen, tab_swot, tab_reports = st.tabs(["✉️ توليد الخطابات", "🔍 التحليل الرباعي SWOT", "📊 تقارير الأداء"])
+    
+    df_p = load_data("parents")
+    df_i = load_data("initiatives")
+    
+    with tab_gen:
+        st.subheader("✉️ مولد المراسلات الرسمية")
+        if not df_p.empty:
+            p_name = st.selectbox("اختر الشريك المستهدف", df_p['name'].tolist())
+            doc_type = st.selectbox("نوع الخطاب", ["دعوة شراكة", "خطاب شكر", "تقرير إنجاز مبادرة"])
+            if st.button("توليد النص"):
+                if doc_type == "دعوة شراكة":
+                    st.info(f"إلى الأستاذ {p_name}، نود دعوتكم للمساهمة في مبادراتنا المجتمعية القادمة...")
+                elif doc_type == "خطاب شكر":
+                    st.success(f"نتقدم بخالص الشكر والتقدير للأستاذ {p_name} على جهوده الملموسة في دعم مسيرة التنمية...")
+                st.caption("يمكنك نسخ النص واستخدامه في مراسلاتك الرسمية.")
+                if st.button("تصدير كـ PDF"): st.warning("خاصية التصدير قيد التطوير")
+        else:
+            st.warning("يجب إضافة شركاء أولاً لتوليد الخطابات.")
+
+    with tab_swot:
+        st.subheader("🔍 التحليل الرباعي الذكي")
+        st.write("بناءً على البيانات الحالية، يقترح النظام التحليل التالي:")
+        col1, col2 = st.columns(2)
+        col1.success(f"**نقاط القوة:** وجود {len(df_p)} شركاء فاعلين.")
+        col2.warning(f"**نقاط الضعف:** الحاجة لزيادة عدد المبادرات المكتملة.")
+        col1.info("**الفرص:** توسيع قاعدة الشراكات في المجالات المهنية.")
+        col2.error("**التحديات:** تفاوت مستويات التفاعل بين الشركاء.")
+
+    with tab_reports:
+        st.subheader("📑 نظام التقارير التلقائي")
+        rep_type = st.radio("نوع التقرير", ["تقرير شهري", "تقرير فصلي", "تقرير سنوي"], horizontal=True)
+        if st.button("توليد التقرير الإحصائي"):
+            st.write(f"تقرير {rep_type} - تم توليده بتاريخ {datetime.now().strftime('%Y-%m-%d')}")
+            st.write(f"إجمالي المبادرات: {len(df_i)}")
+            st.write(f"نسبة الإنجاز: {(len(df_i[df_i['status']=='مكتملة'])/len(df_i)*100 if not df_i.empty else 0):.1f}%")
+            st.download_button("تحميل البيانات (Excel)", df_i.to_csv().encode('utf-8'), "report.csv", "text/csv")
