@@ -28,21 +28,39 @@ def add_log(action):
 
 def login():
     st.title("🔐 تسجيل الدخول للنظام")
+    
+    # محاولة التأكد من وجود الجداول عند كل محاولة دخول لحل مشكلة OperationalError
+    init_db()
+    
     with st.form("login_form"):
         u = st.text_input("اسم المستخدم")
         p = st.text_input("كلمة المرور", type="password")
-        if st.form_submit_button("دخول"):
-            conn = get_connection()
-            user = conn.execute("SELECT role FROM users WHERE username=? AND password=?", (u, p)).fetchone()
-            conn.close()
-            if user:
-                st.session_state.authenticated = True
-                st.session_state.username = u
-                st.session_state.user_role = user[0]
-                add_log("قام بتسجيل الدخول")
-                st.rerun()
-            else:
-                st.error("خطأ في بيانات الدخول")
+        col_l1, col_l2 = st.columns([1, 1])
+        with col_l1:
+            submit = st.form_submit_button("دخول")
+        
+        if submit:
+            try:
+                conn = get_connection()
+                user = conn.execute("SELECT role FROM users WHERE username=? AND password=?", (u, p)).fetchone()
+                conn.close()
+                if user:
+                    st.session_state.authenticated = True
+                    st.session_state.username = u
+                    st.session_state.user_role = user[0]
+                    add_log("قام بتسجيل الدخول")
+                    st.rerun()
+                else:
+                    st.error("خطأ في بيانات الدخول")
+            except Exception as e:
+                st.error(f"حدث خطأ في قاعدة البيانات: {str(e)}")
+                st.info("💡 جرب الضغط على زر 'إعادة ضبط القاعدة' بالأسفل")
+
+    if st.button("⚠️ إعادة ضبط قاعدة البيانات (في حال وجود أخطاء)"):
+        if os.path.exists('community_relations.db'):
+            os.remove('community_relations.db')
+        init_db()
+        st.success("تم إعادة بناء قاعدة البيانات بنجاح. حاول الدخول الآن بـ admin / admin123")
 
 if not st.session_state.authenticated:
     login()
