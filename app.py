@@ -150,9 +150,11 @@ menu = st.sidebar.radio(
 # إضافة التوقيع في أسفل القائمة الجانبية
 st.sidebar.markdown("---")
 st.sidebar.markdown("""
-    <div style="text-align: center; color: #94a3b8; font-size: 0.8rem; padding: 10px;">
-        تصميم وتطوير: <br>
-        <b style="color: #3b82f6; font-size: 1rem;">توفيق اليعقوبي</b>
+    <div style="text-align: center; padding: 20px;">
+        <div style="background: linear-gradient(135deg, #1e293b 0%, #0f172a 100%); padding: 15px; border-radius: 15px; border: 1px solid #334155;">
+            <p style="color: #94a3b8; font-size: 0.7rem; margin-bottom: 5px; letter-spacing: 1px;">تطوير وإخراج</p>
+            <p style="color: #3b82f6; font-size: 1.1rem; font-weight: 800; margin: 0; text-shadow: 0 0 10px rgba(59, 130, 246, 0.3);">توفيق اليعقوبي</p>
+        </div>
     </div>
 """, unsafe_allow_html=True)
 
@@ -165,6 +167,23 @@ def load_data(table):
 
 # --- 1. لوحة التحكم ---
 if menu == "لوحة التحكم":
+    # عرض علوي فخم للتاريخ والترحيب
+    now = datetime.now()
+    st.markdown(f"""
+        <div style="background: linear-gradient(90deg, #1e3a8a 0%, #3b82f6 100%); padding: 30px; border-radius: 20px; color: white; margin-bottom: 30px; box-shadow: 0 10px 20px rgba(59, 130, 246, 0.2);">
+            <div style="display: flex; justify-content: space-between; align-items: center;">
+                <div>
+                    <h2 style="color: white; margin: 0; font-size: 1.8rem;">مرحباً بك، أ. توفيق اليعقوبي 👋</h2>
+                    <p style="margin: 5px 0 0 0; opacity: 0.9;">نتمنى لك يوماً مليئاً بالإنجازات المجتمعية المثمرة.</p>
+                </div>
+                <div style="text-align: left;">
+                    <h3 style="color: white; margin: 0; font-size: 1.5rem;">{now.strftime('%H:%M:%S')}</h3>
+                    <p style="margin: 0; opacity: 0.9;">{now.strftime('%Y-%m-%d')}</p>
+                </div>
+            </div>
+        </div>
+    """, unsafe_allow_html=True)
+
     st.title("📊 لوحة القيادة المجتمعية")
     col1, col2, col3, col4 = st.columns(4)
     
