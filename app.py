@@ -350,24 +350,29 @@ elif menu == "🚀 إدارة المبادرات":
                 status = st.selectbox("الحالة الحالية", ["مخطط لها", "قيد التنفيذ", "مكتملة"])
                 impact = st.slider("مستوى الأثر (1-10)", 1, 10, 5)
                 if st.form_submit_button("حفظ المبادرة"):
-                    conn = get_connection()
-                    conn.execute("INSERT INTO initiatives (title, partner, description, status, impact_score) VALUES (?,?,?,?,?)", 
-                                 (title, partner, desc, status, impact))
-                    conn.commit(); conn.close()
-                    
-                    # مزامنة سحابية
-                    if conn_gs:
-                        try:
-                            new_data = pd.DataFrame([{"العنوان": title, "الشريك": partner, "الوصف": desc, "الحالة": status, "الأثر": impact, "التاريخ": str(datetime.now())}])
+                    try:
+                        conn = get_connection()
+                        conn.execute("INSERT INTO initiatives (title, partner, description, status, impact_score) VALUES (?,?,?,?,?)", 
+                                     (title, partner, desc, status, impact))
+                        conn.commit()
+                        conn.close()
+                        
+                        # مزامنة سحابية
+                        if conn_gs:
                             try:
-                                existing = conn_gs.read(worksheet="Initiatives", ttl=0)
-                                updated = pd.concat([existing, new_data], ignore_index=True)
-                            except: updated = new_data
-                            conn_gs.update(worksheet="Initiatives", data=updated)
-                        except: pass
-                    
-                    st.success("تم التوثيق والربط بنجاح")
-                    st.rerun()
+                                new_data = pd.DataFrame([{"العنوان": title, "الشريك": partner, "الوصف": desc, "الحالة": status, "الأثر": impact, "التاريخ": str(datetime.now())}])
+                                try:
+                                    existing = conn_gs.read(worksheet="Initiatives", ttl=0)
+                                    updated = pd.concat([existing, new_data], ignore_index=True)
+                                except: updated = new_data
+                                conn_gs.update(worksheet="Initiatives", data=updated)
+                            except: pass
+                        
+                        st.success("تم التوثيق والربط بنجاح")
+                        time.sleep(1)
+                        st.rerun()
+                    except Exception as e:
+                        st.error(f"خطأ في قاعدة البيانات: {e}")
     
     df_i = load_data("initiatives")
     if not df_i.empty:
