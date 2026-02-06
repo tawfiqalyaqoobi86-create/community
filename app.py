@@ -209,7 +209,10 @@ if menu == "📊 لوحة التحكم":
         if not df_pl.empty and 'priority' in df_pl.columns and 'status' in df_pl.columns:
             urgent = df_pl[(df_pl['priority'] == 'مرتفع') & (df_pl['status'] != 'مكتمل')]
             if not urgent.empty:
-                for _, r in urgent.iterrows(): st.error(f"⚠️ {r['activity']}")
+                for _, r in urgent.iterrows(): 
+                    t_icon = "💰" if r.get('task_type') == 'مادي' else "💡"
+                    t_label = f"({r.get('task_type', 'معنوي')})"
+                    st.error(f"{t_icon} {r['activity']} {t_label}")
             else: st.success("لا توجد مهام متأخرة")
         else:
             st.success("لا توجد مهام مسجلة")
@@ -224,28 +227,47 @@ elif menu == "📅 خطة العمل":
                 resp = st.text_input("المسؤول")
                 timeframe = st.text_input("الجدول الزمني")
                 kpi = st.text_input("مؤشر الأداء (KPI)")
-                prio = st.selectbox("الأولوية", ["مرتفع", "متوسط", "منخفض"])
+                col_p, col_t = st.columns(2)
+                with col_p:
+                    prio = st.selectbox("الأولوية", ["مرتفع", "متوسط", "منخفض"])
+                with col_t:
+                    t_type = st.selectbox("نوع المهمة", ["معنوي", "مادي"])
+                
                 if st.form_submit_button("حفظ"):
                     conn = get_connection()
-                    conn.execute("INSERT INTO action_plan (objective, activity, responsibility, timeframe, kpi, priority, status) VALUES (?,?,?,?,?,?,'قيد التنفيذ')", 
-                                 (obj, act, resp, timeframe, kpi, prio))
-                    conn.commit(); conn.close()
-                    
-                    # مزامنة سحابية
-                    if conn_gs:
-                        try:
-                            new_data = pd.DataFrame([{"الهدف": obj, "النشاط": act, "المسؤول": resp, "الزمن": timeframe, "KPI": kpi, "الأولوية": prio, "الحالة": "قيد التنفيذ"}])
+                    try:
+                        conn.execute("INSERT INTO action_plan (objective, activity, responsibility, timeframe, kpi, priority, status, task_type) VALUES (?,?,?,?,?,?,'قيد التنفيذ',?)", 
+                                     (obj, act, resp, timeframe, kpi, prio, t_type))
+                        conn.commit()
+                        conn.close()
+                        
+                        # مزامنة سحابية
+                        if conn_gs:
                             try:
-                                existing = conn_gs.read(worksheet="ActionPlan", ttl=0)
-                                existing = existing.dropna(how='all')
-                                updated = pd.concat([existing, new_data], ignore_index=True)
-                            except: updated = new_data
-                            conn_gs.update(worksheet="ActionPlan", data=updated)
-                        except Exception as e:
-                            st.warning(f"⚠️ فشل تحديث Google Sheets (خطة العمل): {e}")
-                    
-                    st.success("تم الحفظ بنجاح")
-                    st.rerun()
+                                new_data = pd.DataFrame([{"الهدف": obj, "النشاط": act, "المسؤول": resp, "الزمن": timeframe, "KPI": kpi, "الأولوية": prio, "النوع": t_type, "الحالة": "قيد التنفيذ"}])
+                                try:
+                                    existing = conn_gs.read(worksheet="ActionPlan", ttl=0)
+                                    existing = existing.dropna(how='all')
+                                    updated = pd.concat([existing, new_data], ignore_index=True)
+                                except: updated = new_data
+                                conn_gs.update(worksheet="ActionPlan", data=updated)
+                            except: pass
+                        
+                        st.success("تم الحفظ بنجاح")
+                        st.rerun()
+                    except Exception as e:
+                        # إضافة العمود في حال عدم وجوده (للبيئة السحابية)
+                        if "no column named task_type" in str(e):
+                            conn.execute("ALTER TABLE action_plan ADD COLUMN task_type TEXT DEFAULT 'معنوي'")
+                            conn.commit()
+                            conn.execute("INSERT INTO action_plan (objective, activity, responsibility, timeframe, kpi, priority, status, task_type) VALUES (?,?,?,?,?,?,'قيد التنفيذ',?)", 
+                                         (obj, act, resp, timeframe, kpi, prio, t_type))
+                            conn.commit()
+                            conn.close()
+                            st.success("تم التحديث والحفظ")
+                            st.rerun()
+                        else:
+                            st.error(f"خطأ: {e}")
     
     df_pl = load_data("action_plan")
     if not df_pl.empty:
