@@ -359,9 +359,12 @@ elif menu == "🎭 الفعاليات والأنشطة":
                 el = st.text_input("المكان")
                 at = st.number_input("عدد الحضور المتوقع", 0)
                 if st.form_submit_button("إضافة للجدول"):
-                    conn = get_connection()
-                    conn.execute("INSERT INTO events (name, date, location, attendees_count) VALUES (?,?,?,?)", (en, str(ed), el, at))
-                    conn.commit(); conn.close()
+                    try:
+                        conn = get_connection()
+                        conn.execute("INSERT INTO events (name, date, location, attendees_count) VALUES (?,?,?,?)", 
+                                     (en, str(ed), el, at))
+                        conn.commit()
+                        conn.close()
                     
                     # مزامنة سحابية
                     if conn_gs:
