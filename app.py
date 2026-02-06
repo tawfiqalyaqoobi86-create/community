@@ -352,36 +352,48 @@ elif menu == "🎭 الفعاليات والأنشطة":
                 el = st.text_input("المكان")
                 at = st.number_input("عدد الحضور المتوقع", 0)
                 if st.form_submit_button("إضافة للجدول"):
-                    success = False
+                    success_local = False
                     try:
                         conn = get_connection()
+                        # التأكد من وجود الجدول قبل الإدخال (حل مشكلة البيئات السحابية)
+                        conn.execute('''CREATE TABLE IF NOT EXISTS events (
+                            id INTEGER PRIMARY KEY AUTOINCREMENT,
+                            name TEXT NOT NULL,
+                            date TEXT,
+                            location TEXT,
+                            attendees_count INTEGER,
+                            rating INTEGER
+                        )''')
                         conn.execute("INSERT INTO events (name, date, location, attendees_count) VALUES (?,?,?,?)", 
                                      (en, str(ed), el, at))
                         conn.commit()
                         conn.close()
-                        success = True
+                        success_local = True
                     except Exception as e:
-                        st.error(f"❌ فشل الحفظ المحلي: {e}")
+                        # إذا فشل الحفظ المحلي في السحاب، لا نتوقف بل نحاول السحابي فقط
+                        st.info("ℹ️ ملاحظة: سيتم الحفظ سحابياً فقط (البيئة المحلية مؤقتة)")
                     
-                    if success:
-                        # مزامنة سحابية
-                        if conn_gs:
+                    # مزامنة سحابية (الأولوية القصوى)
+                    if conn_gs:
+                        try:
+                            new_data = pd.DataFrame([{"الفعالية": en, "التاريخ": str(ed), "المكان": el, "الحضور": at}])
                             try:
-                                new_data = pd.DataFrame([{"الفعالية": en, "التاريخ": str(ed), "المكان": el, "الحضور": at}])
-                                try:
-                                    existing = conn_gs.read(worksheet="Events", ttl=0)
-                                    existing = existing.dropna(how='all')
-                                    updated = pd.concat([existing, new_data], ignore_index=True)
-                                except: updated = new_data
-                                conn_gs.update(worksheet="Events", data=updated)
-                                st.success("✅ تم الحفظ محلياً وفي جوجل شيت")
-                            except Exception as e:
-                                st.warning(f"⚠️ تم الحفظ محلياً ولكن فشل التحديث السحابي: {e}")
-                        else:
-                            st.success("✅ تم الحفظ محلياً (الربط السحابي غير مفعل)")
-                        
+                                existing = conn_gs.read(worksheet="Events", ttl=0)
+                                existing = existing.dropna(how='all')
+                                updated = pd.concat([existing, new_data], ignore_index=True)
+                            except: updated = new_data
+                            conn_gs.update(worksheet="Events", data=updated)
+                            st.success("✅ تم الحفظ بنجاح في جوجل شيت")
+                            time.sleep(1)
+                            st.rerun()
+                        except Exception as e:
+                            st.error(f"❌ فشل الحفظ في جوجل شيت: {e}")
+                    elif success_local:
+                        st.success("✅ تم الحفظ محلياً")
                         time.sleep(1)
                         st.rerun()
+                    else:
+                        st.error("❌ فشل الحفظ في جميع الوسائط. يرجى التحقق من الربط.")
     
     df_e = load_data("events")
     if not df_e.empty:
