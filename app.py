@@ -54,11 +54,16 @@ is_admin = st.session_state.user_role == "admin"
 
 # محاولة الربط بجوجل شيت
 try:
-    conn_gs = st.connection("gsheets", type=GSheetsConnection)
+    if "gsheets" in st.secrets:
+        spreadsheet_url = st.secrets.gsheets.get("spreadsheet", "")
+        conn_gs = st.connection("gsheets", type=GSheetsConnection)
+    else:
+        conn_gs = None
 except Exception as e:
     conn_gs = None
     if 'logged_in' in st.session_state and st.session_state.user_role == "admin":
         st.sidebar.error(f"⚠️ فشل الاتصال بـ Google Sheets: {e}")
+        st.sidebar.info("تأكد من إعداد secrets.toml ومشاركة الملف مع بريد الحساب الآلي.")
 
 # تنسيق CSS مخصص - ألوان هادئة ورسمية
 st.markdown("""
