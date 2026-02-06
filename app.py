@@ -55,8 +55,10 @@ is_admin = st.session_state.user_role == "admin"
 # محاولة الربط بجوجل شيت
 try:
     conn_gs = st.connection("gsheets", type=GSheetsConnection)
-except Exception:
+except Exception as e:
     conn_gs = None
+    if 'logged_in' in st.session_state and st.session_state.user_role == "admin":
+        st.sidebar.error(f"⚠️ فشل الاتصال بـ Google Sheets: {e}")
 
 # تنسيق CSS مخصص - ألوان هادئة ورسمية
 st.markdown("""
@@ -238,10 +240,12 @@ elif menu == "📅 خطة العمل":
                             new_data = pd.DataFrame([{"الهدف": obj, "النشاط": act, "المسؤول": resp, "الزمن": timeframe, "KPI": kpi, "الأولوية": prio, "الحالة": "قيد التنفيذ"}])
                             try:
                                 existing = conn_gs.read(worksheet="ActionPlan", ttl=0)
+                                existing = existing.dropna(how='all')
                                 updated = pd.concat([existing, new_data], ignore_index=True)
                             except: updated = new_data
                             conn_gs.update(worksheet="ActionPlan", data=updated)
-                        except: pass
+                        except Exception as e:
+                            st.warning(f"⚠️ فشل تحديث Google Sheets (خطة العمل): {e}")
                     
                     st.success("تم الحفظ بنجاح")
                     st.rerun()
@@ -263,8 +267,9 @@ elif menu == "📅 خطة العمل":
                     if conn_gs:
                         try:
                             remaining = load_data("action_plan")
-                            conn_gs.update(worksheet="Plan", data=remaining.drop(columns=['id', 'حذف'], errors='ignore'))
-                        except: pass
+                            conn_gs.update(worksheet="ActionPlan", data=remaining.drop(columns=['id', 'حذف'], errors='ignore'))
+                        except Exception as e:
+                            st.warning(f"⚠️ فشل تحديث Google Sheets (خطة العمل): {e}")
                     st.rerun()
         else:
             st.dataframe(df_pl.drop(columns=['id'], errors='ignore'), use_container_width=True)
@@ -291,10 +296,12 @@ elif menu == "👨‍👩‍👧‍👦 الشركاء وأولياء الأمو
                             new_data = pd.DataFrame([{"الاسم": name, "النوع": type_p, "الخبرة": exp, "التفاعل": level, "التاريخ": str(datetime.now())}])
                             try:
                                 existing = conn_gs.read(worksheet="Parents", ttl=0)
+                                existing = existing.dropna(how='all')
                                 updated = pd.concat([existing, new_data], ignore_index=True)
                             except: updated = new_data
                             conn_gs.update(worksheet="Parents", data=updated)
-                        except: pass
+                        except Exception as e:
+                            st.warning(f"⚠️ فشل تحديث Google Sheets (الشركاء): {e}")
                     
                     st.success("تم تسجيل الشريك بنجاح")
                     st.rerun()
@@ -317,7 +324,8 @@ elif menu == "👨‍👩‍👧‍👦 الشركاء وأولياء الأمو
                         try:
                             remaining = load_data("parents")
                             conn_gs.update(worksheet="Parents", data=remaining.drop(columns=['id', 'حذف'], errors='ignore'))
-                        except: pass
+                        except Exception as e:
+                            st.warning(f"⚠️ فشل تحديث Google Sheets (الشركاء): {e}")
                     st.rerun()
         else:
             st.dataframe(df_p.drop(columns=['id'], errors='ignore'), use_container_width=True)
@@ -363,10 +371,12 @@ elif menu == "🚀 إدارة المبادرات":
                                 new_data = pd.DataFrame([{"العنوان": title, "الشريك": partner, "الوصف": desc, "الحالة": status, "الأثر": impact, "التاريخ": str(datetime.now())}])
                                 try:
                                     existing = conn_gs.read(worksheet="Initiatives", ttl=0)
+                                    existing = existing.dropna(how='all')
                                     updated = pd.concat([existing, new_data], ignore_index=True)
                                 except: updated = new_data
                                 conn_gs.update(worksheet="Initiatives", data=updated)
-                            except: pass
+                            except Exception as e:
+                                st.warning(f"⚠️ فشل تحديث Google Sheets (المبادرات): {e}")
                         
                         st.success("تم التوثيق والربط بنجاح")
                         time.sleep(1)
@@ -392,7 +402,8 @@ elif menu == "🚀 إدارة المبادرات":
                         try:
                             remaining = load_data("initiatives")
                             conn_gs.update(worksheet="Initiatives", data=remaining.drop(columns=['id', 'حذف'], errors='ignore'))
-                        except: pass
+                        except Exception as e:
+                            st.warning(f"⚠️ فشل تحديث Google Sheets (المبادرات): {e}")
                     st.rerun()
         else:
             st.dataframe(df_i.drop(columns=['id'], errors='ignore'), use_container_width=True)
@@ -417,10 +428,12 @@ elif menu == "🎭 الفعاليات والأنشطة":
                             new_data = pd.DataFrame([{"الفعالية": en, "التاريخ": str(ed), "المكان": el, "الحضور": at}])
                             try:
                                 existing = conn_gs.read(worksheet="Events", ttl=0)
+                                existing = existing.dropna(how='all')
                                 updated = pd.concat([existing, new_data], ignore_index=True)
                             except: updated = new_data
                             conn_gs.update(worksheet="Events", data=updated)
-                        except: pass
+                        except Exception as e:
+                            st.warning(f"⚠️ فشل تحديث Google Sheets (الفعاليات): {e}")
                     
                     st.rerun()
     
@@ -442,7 +455,8 @@ elif menu == "🎭 الفعاليات والأنشطة":
                         try:
                             remaining = load_data("events")
                             conn_gs.update(worksheet="Events", data=remaining.drop(columns=['id', 'حذف'], errors='ignore'))
-                        except: pass
+                        except Exception as e:
+                            st.warning(f"⚠️ فشل تحديث Google Sheets (الفعاليات): {e}")
                     st.rerun()
         else:
             st.dataframe(df_e.drop(columns=['id'], errors='ignore'), use_container_width=True)
