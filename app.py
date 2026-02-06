@@ -360,8 +360,16 @@ elif menu == "🚀 إدارة المبادرات":
                 if st.form_submit_button("حفظ المبادرة"):
                     try:
                         conn = get_connection()
-                        conn.execute("INSERT INTO initiatives (title, partner, description, status, impact_score) VALUES (?,?,?,?,?)", 
-                                     (title, partner, desc, status, impact))
+                        try:
+                            conn.execute("INSERT INTO initiatives (title, partner, description, status, impact_score) VALUES (?,?,?,?,?)", 
+                                         (title, partner, desc, status, impact))
+                        except Exception as e:
+                            if "no column named partner" in str(e):
+                                conn.execute("ALTER TABLE initiatives ADD COLUMN partner TEXT")
+                                conn.execute("INSERT INTO initiatives (title, partner, description, status, impact_score) VALUES (?,?,?,?,?)", 
+                                             (title, partner, desc, status, impact))
+                            else:
+                                raise e
                         conn.commit()
                         conn.close()
                         
