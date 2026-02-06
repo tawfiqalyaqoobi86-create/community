@@ -318,11 +318,26 @@ elif menu == "📅 خطة العمل":
             
             if c_save.button("💾 حفظ كافة التعديلات في الخطة"):
                 conn = get_connection()
-                for _, row in edited_df.iterrows():
-                    if 'id' in row and not pd.isna(row['id']):
-                        conn.execute("""UPDATE action_plan SET objective=?, activity=?, responsibility=?, timeframe=?, kpi=?, priority=?, status=?, task_type=? WHERE id=?""",
-                                     (row['الهدف'], row['النشاط'], row['المسؤول'], row['الجدول الزمني'], row['مؤشر الأداء'], row['الأولوية'], row['الحالة'], row.get('نوع المهمة', 'معنوي'), row['id']))
-                conn.commit(); conn.close()
+                try:
+                    for _, row in edited_df.iterrows():
+                        if 'id' in row and not pd.isna(row['id']):
+                            conn.execute("""UPDATE action_plan SET objective=?, activity=?, responsibility=?, timeframe=?, kpi=?, priority=?, status=?, task_type=? WHERE id=?""",
+                                         (row['الهدف'], row['النشاط'], row['المسؤول'], row['الجدول الزمني'], row['مؤشر الأداء'], row['الأولوية'], row['الحالة'], row.get('نوع المهمة', 'معنوي'), row['id']))
+                    conn.commit()
+                except Exception as e:
+                    if "no column named task_type" in str(e):
+                        conn.execute("ALTER TABLE action_plan ADD COLUMN task_type TEXT DEFAULT 'معنوي'")
+                        conn.commit()
+                        # إعادة المحاولة بعد إضافة العمود
+                        for _, row in edited_df.iterrows():
+                            if 'id' in row and not pd.isna(row['id']):
+                                conn.execute("""UPDATE action_plan SET objective=?, activity=?, responsibility=?, timeframe=?, kpi=?, priority=?, status=?, task_type=? WHERE id=?""",
+                                             (row['الهدف'], row['النشاط'], row['المسؤول'], row['الجدول الزمني'], row['مؤشر الأداء'], row['الأولوية'], row['الحالة'], row.get('نوع المهمة', 'معنوي'), row['id']))
+                        conn.commit()
+                    else:
+                        st.error(f"❌ خطأ في قاعدة البيانات: {e}")
+                finally:
+                    conn.close()
                 
                 if conn_gs:
                     try:
