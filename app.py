@@ -54,16 +54,9 @@ is_admin = st.session_state.user_role == "admin"
 
 # محاولة الربط بجوجل شيت
 try:
-    if "gsheets" in st.secrets:
-        spreadsheet_url = st.secrets.gsheets.get("spreadsheet", "")
-        conn_gs = st.connection("gsheets", type=GSheetsConnection)
-    else:
-        conn_gs = None
+    conn_gs = st.connection("gsheets", type=GSheetsConnection)
 except Exception as e:
     conn_gs = None
-    if 'logged_in' in st.session_state and st.session_state.user_role == "admin":
-        st.sidebar.error(f"⚠️ فشل الاتصال بـ Google Sheets: {e}")
-        st.sidebar.info("تأكد من إعداد secrets.toml ومشاركة الملف مع بريد الحساب الآلي.")
 
 # تنسيق CSS مخصص - ألوان هادئة ورسمية
 st.markdown("""
@@ -359,29 +352,36 @@ elif menu == "🎭 الفعاليات والأنشطة":
                 el = st.text_input("المكان")
                 at = st.number_input("عدد الحضور المتوقع", 0)
                 if st.form_submit_button("إضافة للجدول"):
+                    success = False
                     try:
                         conn = get_connection()
                         conn.execute("INSERT INTO events (name, date, location, attendees_count) VALUES (?,?,?,?)", 
                                      (en, str(ed), el, at))
                         conn.commit()
                         conn.close()
+                        success = True
                     except Exception as e:
-                        st.error(f"خطأ في قاعدة البيانات: {e}")
+                        st.error(f"❌ فشل الحفظ المحلي: {e}")
                     
-                    # مزامنة سحابية
-                    if conn_gs:
-                        try:
-                            new_data = pd.DataFrame([{"الفعالية": en, "التاريخ": str(ed), "المكان": el, "الحضور": at}])
+                    if success:
+                        # مزامنة سحابية
+                        if conn_gs:
                             try:
-                                existing = conn_gs.read(worksheet="Events", ttl=0)
-                                existing = existing.dropna(how='all')
-                                updated = pd.concat([existing, new_data], ignore_index=True)
-                            except: updated = new_data
-                            conn_gs.update(worksheet="Events", data=updated)
-                        except Exception as e:
-                            st.warning(f"⚠️ فشل تحديث Google Sheets (الفعاليات): {e}")
-                    
-                    st.rerun()
+                                new_data = pd.DataFrame([{"الفعالية": en, "التاريخ": str(ed), "المكان": el, "الحضور": at}])
+                                try:
+                                    existing = conn_gs.read(worksheet="Events", ttl=0)
+                                    existing = existing.dropna(how='all')
+                                    updated = pd.concat([existing, new_data], ignore_index=True)
+                                except: updated = new_data
+                                conn_gs.update(worksheet="Events", data=updated)
+                                st.success("✅ تم الحفظ محلياً وفي جوجل شيت")
+                            except Exception as e:
+                                st.warning(f"⚠️ تم الحفظ محلياً ولكن فشل التحديث السحابي: {e}")
+                        else:
+                            st.success("✅ تم الحفظ محلياً (الربط السحابي غير مفعل)")
+                        
+                        time.sleep(1)
+                        st.rerun()
     
     df_e = load_data("events")
     if not df_e.empty:
