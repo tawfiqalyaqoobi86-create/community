@@ -454,6 +454,34 @@ elif menu == "📈 التقارير والإحصائيات":
             if 'participation_type' in df_p.columns:
                 fig_pie = px.pie(df_p, names='participation_type', title="أنواع الشراكات")
                 st.plotly_chart(fig_pie, use_container_width=True)
+        
+        st.divider()
+        if st.button("📤 تصدير ملخص التقارير إلى Google Sheets"):
+            if conn_gs:
+                try:
+                    # تجهيز بيانات التقرير
+                    report_data = pd.DataFrame([{
+                        "التاريخ": datetime.now().strftime("%Y-%m-%d %H:%M"),
+                        "إجمالي الفعاليات": len(df_e),
+                        "إجمالي الشركاء": len(df_p),
+                        "إجمالي الحضور": df_e['attendees_count'].sum() if 'attendees_count' in df_e.columns else 0,
+                        "ملاحظات": "تقرير تلقائي من النظام"
+                    }])
+                    
+                    try:
+                        existing_reports = conn_gs.read(worksheet="Reports", ttl=0)
+                        existing_reports = existing_reports.dropna(how='all')
+                        updated_reports = pd.concat([existing_reports, report_data], ignore_index=True)
+                    except:
+                        updated_reports = report_data
+                    
+                    conn_gs.update(worksheet="Reports", data=updated_reports)
+                    st.success("✅ تم تصدير التقرير بنجاح إلى ورقة 'Reports'")
+                except Exception as e:
+                    st.error(f"❌ فشل التصدير: {e}")
+                    st.info("تأكد من وجود تبويب باسم 'Reports' في ملف جوجل شيت.")
+            else:
+                st.error("❌ الاتصال بـ Google Sheets غير مفعل.")
     else:
         st.info("لا توجد بيانات كافية لتوليد التقارير")
 
