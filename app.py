@@ -213,9 +213,10 @@ if menu == "📊 لوحة التحكم":
                     t_icon = "💰" if r.get('task_type') == 'مادي' else "💡"
                     date_info = f"📅 {r['timeframe']}" if r['timeframe'] else ""
                     
-                    # إنشاء رابط واتساب للتذكير
+                    # إنشاء رابط واتساب الرسمي للتذكير
                     msg = f"تذكير بمهمة: {r['activity']}\nالتاريخ: {r['timeframe']}\nالنوع: {r.get('task_type', 'معنوي')}"
-                    whatsapp_url = f"https://wa.me/?text={msg.replace(' ', '%20').replace('\n', '%0A')}"
+                    # استخدام الرابط الرسمي الكامل لتجنب مشاكل الحجب
+                    whatsapp_url = f"https://api.whatsapp.com/send?text={msg.replace(' ', '%20').replace('\n', '%0A')}"
                     
                     col_msg, col_wa = st.columns([4, 1])
                     col_msg.error(f"{t_icon} **{r['activity']}** \n {date_info}")
@@ -276,27 +277,36 @@ elif menu == "📅 خطة العمل":
                         else:
                             st.error(f"خطأ: {e}")
     
-    df_pl = load_data("action_plan")
     if not df_pl.empty:
-        st.subheader("📋 بنود الخطة")
+        st.subheader("📋 بنود الخطة (يمكنك التعديل مباشرة من الجدول)")
         if is_admin:
             df_pl['حذف'] = False
-            edited_df = st.data_editor(df_pl, key="plan_edit", use_container_width=True)
-            if st.button("🔴 حذف المحدد من الخطة"):
+            edited_df = st.data_editor(df_pl, key="plan_edit", use_container_width=True, num_rows="dynamic")
+            
+            c_del, c_save = st.columns(2)
+            if c_del.button("🔴 حذف المحدد من الخطة"):
                 to_del = edited_df[edited_df['حذف'] == True]
                 if not to_del.empty:
                     conn = get_connection()
                     for rid in to_del['id']: conn.execute(f"DELETE FROM action_plan WHERE id={rid}")
                     conn.commit(); conn.close()
-                    
-                    # تحديث السحاب
-                    if conn_gs:
-                        try:
-                            remaining = load_data("action_plan")
-                            conn_gs.update(worksheet="ActionPlan", data=remaining.drop(columns=['id', 'حذف'], errors='ignore'))
-                        except Exception as e:
-                            st.warning(f"⚠️ فشل تحديث Google Sheets (خطة العمل): {e}")
+                    st.success("تم الحذف بنجاح")
                     st.rerun()
+            
+            if c_save.button("💾 حفظ كافة التعديلات في الخطة"):
+                conn = get_connection()
+                for _, row in edited_df.iterrows():
+                    if 'id' in row and not pd.isna(row['id']):
+                        conn.execute("""UPDATE action_plan SET objective=?, activity=?, responsibility=?, timeframe=?, kpi=?, priority=?, status=?, task_type=? WHERE id=?""",
+                                     (row['objective'], row['activity'], row['responsibility'], row['timeframe'], row['kpi'], row['priority'], row['status'], row.get('task_type', 'معنوي'), row['id']))
+                conn.commit(); conn.close()
+                
+                if conn_gs:
+                    try:
+                        conn_gs.update(worksheet="ActionPlan", data=edited_df.drop(columns=['id', 'حذف'], errors='ignore'))
+                    except: pass
+                st.success("✅ تم تحديث الخطة بنجاح")
+                st.rerun()
         else:
             st.dataframe(df_pl.drop(columns=['id'], errors='ignore'), use_container_width=True)
 
@@ -334,25 +344,33 @@ elif menu == "👨‍👩‍👧‍👦 الشركاء وأولياء الأمو
 
     df_p = load_data("parents")
     if not df_p.empty:
-        st.subheader("🔍 استعراض الشركاء والربط الذكي")
+        st.subheader("🔍 استعراض الشركاء والربط الذكي (يمكنك التعديل مباشرة)")
         if is_admin:
             df_p['حذف'] = False
-            edited_p = st.data_editor(df_p, key="p_edit", use_container_width=True)
-            if st.button("🔴 حذف المحدد من الشركاء"):
+            edited_p = st.data_editor(df_p, key="p_edit", use_container_width=True, num_rows="dynamic")
+            
+            c_p1, c_p2 = st.columns(2)
+            if c_p1.button("🔴 حذف المحدد من الشركاء"):
                 to_del = edited_p[edited_p['حذف'] == True]
                 if not to_del.empty:
                     conn = get_connection()
                     for rid in to_del['id']: conn.execute(f"DELETE FROM parents WHERE id={rid}")
                     conn.commit(); conn.close()
-                    
-                    # تحديث السحاب
-                    if conn_gs:
-                        try:
-                            remaining = load_data("parents")
-                            conn_gs.update(worksheet="Parents", data=remaining.drop(columns=['id', 'حذف'], errors='ignore'))
-                        except Exception as e:
-                            st.warning(f"⚠️ فشل تحديث Google Sheets (الشركاء): {e}")
+                    st.success("تم الحذف بنجاح")
                     st.rerun()
+            
+            if c_p2.button("💾 حفظ تعديلات الشركاء"):
+                conn = get_connection()
+                for _, row in edited_p.iterrows():
+                    if 'id' in row and not pd.isna(row['id']):
+                        conn.execute("""UPDATE parents SET name=?, participation_type=?, expertise=?, interaction_level=? WHERE id=?""",
+                                     (row['name'], row['participation_type'], row['expertise'], row['interaction_level'], row['id']))
+                conn.commit(); conn.close()
+                if conn_gs:
+                    try: conn_gs.update(worksheet="Parents", data=edited_p.drop(columns=['id', 'حذف'], errors='ignore'))
+                    except: pass
+                st.success("✅ تم التحديث بنجاح")
+                st.rerun()
         else:
             st.dataframe(df_p.drop(columns=['id'], errors='ignore'), use_container_width=True)
         
@@ -441,28 +459,33 @@ elif menu == "🎭 الفعاليات والأنشطة":
         
         if is_admin:
             display_df['حذف'] = False
-            edited_e = st.data_editor(display_df, key="e_edit", use_container_width=True)
-            if st.button("🔴 حذف الفعاليات المحددة"):
+            edited_e = st.data_editor(display_df, key="e_edit", use_container_width=True, num_rows="dynamic")
+            
+            c_e1, c_e2 = st.columns(2)
+            if c_e1.button("🔴 حذف الفعاليات المحددة"):
                 to_del = edited_e[edited_e['حذف'] == True]
                 if not to_del.empty:
                     conn = get_connection()
-                    # استخدام الاسم الأصلي للحذف
                     for _, row in to_del.iterrows():
-                        # البحث عن المعرف الأصلي من df_e
                         rid = df_e.iloc[row.name]['id']
                         conn.execute(f"DELETE FROM events WHERE id={rid}")
                     conn.commit(); conn.close()
-                    
-                    # تحديث السحاب
-                    if conn_gs:
-                        try:
-                            remaining = load_data("events").rename(columns={
-                                'name': 'الفعالية', 'date': 'التاريخ', 'location': 'المكان', 'attendees_count': 'الحضور'
-                            })
-                            conn_gs.update(worksheet="Events", data=remaining.drop(columns=['id'], errors='ignore'))
-                        except Exception as e:
-                            st.warning(f"⚠️ فشل تحديث Google Sheets (الفعاليات): {e}")
+                    st.success("تم الحذف بنجاح")
                     st.rerun()
+            
+            if c_e2.button("💾 حفظ تعديلات الفعاليات"):
+                conn = get_connection()
+                for _, row in edited_e.iterrows():
+                    # البحث عن المعرف (id) في الصف المعدل
+                    if 'id' in row and not pd.isna(row['id']):
+                        conn.execute("""UPDATE events SET name=?, date=?, location=?, attendees_count=?, rating=? WHERE id=?""",
+                                     (row['الفعالية'], str(row['التاريخ']), row['المكان'], row['الحضور المتوقع'], row['التقييم'], row['id']))
+                conn.commit(); conn.close()
+                if conn_gs:
+                    try: conn_gs.update(worksheet="Events", data=edited_e.drop(columns=['حذف', 'id'], errors='ignore'))
+                    except: pass
+                st.success("✅ تم تحديث الفعاليات بنجاح")
+                st.rerun()
         else:
             st.dataframe(display_df.drop(columns=['id', 'حذف'], errors='ignore'), use_container_width=True)
 
