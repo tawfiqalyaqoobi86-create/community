@@ -365,6 +365,8 @@ elif menu == "🎭 الفعاليات والأنشطة":
                                      (en, str(ed), el, at))
                         conn.commit()
                         conn.close()
+                    except Exception as e:
+                        st.error(f"خطأ في قاعدة البيانات: {e}")
                     
                     # مزامنة سحابية
                     if conn_gs:
