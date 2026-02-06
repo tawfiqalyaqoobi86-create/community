@@ -211,8 +211,15 @@ if menu == "📊 لوحة التحكم":
             if not urgent.empty:
                 for _, r in urgent.iterrows(): 
                     t_icon = "💰" if r.get('task_type') == 'مادي' else "💡"
-                    t_label = f"({r.get('task_type', 'معنوي')})"
-                    st.error(f"{t_icon} {r['activity']} {t_label}")
+                    date_info = f"📅 {r['timeframe']}" if r['timeframe'] else ""
+                    
+                    # إنشاء رابط واتساب للتذكير
+                    msg = f"تذكير بمهمة: {r['activity']}\nالتاريخ: {r['timeframe']}\nالنوع: {r.get('task_type', 'معنوي')}"
+                    whatsapp_url = f"https://wa.me/?text={msg.replace(' ', '%20').replace('\n', '%0A')}"
+                    
+                    col_msg, col_wa = st.columns([4, 1])
+                    col_msg.error(f"{t_icon} **{r['activity']}** \n {date_info}")
+                    col_wa.markdown(f"[📲 تذكير]({whatsapp_url})")
             else: st.success("لا توجد مهام متأخرة")
         else:
             st.success("لا توجد مهام مسجلة")
