@@ -164,7 +164,6 @@ menu = st.sidebar.radio(
         "📊 لوحة التحكم", 
         "📅 خطة العمل", 
         "👨‍👩‍👧‍👦 الشركاء وأولياء الأمور", 
-        "🚀 إدارة المبادرات", 
         "🎭 الفعاليات والأنشطة", 
         "📈 التقارير والإحصائيات", 
         "🤖 الذكاء الاصطناعي"
@@ -181,7 +180,7 @@ if st.sidebar.button("🚪 تسجيل الخروج"):
 
 # --- معالجة البحث ---
 if search_query:
-    all_dfs = {"الشركاء": load_data("parents"), "المبادرات": load_data("initiatives"), "الخطة": load_data("action_plan")}
+    all_dfs = {"الشركاء": load_data("parents"), "الخطة": load_data("action_plan")}
     with st.expander("🔎 نتائج البحث", expanded=True):
         for cat, df in all_dfs.items():
             if not df.empty:
@@ -195,14 +194,14 @@ if search_query:
 if menu == "📊 لوحة التحكم":
     st.title("📊 لوحة القيادة المجتمعية")
     df_p = load_data("parents")
-    df_i = load_data("initiatives")
     df_pl = load_data("action_plan")
+    df_e = load_data("events")
     
     c1, c2, c3, c4 = st.columns(4)
     c1.metric("الشركاء المسجلين", len(df_p))
-    c2.metric("المبادرات المنفذة", len(df_i))
+    c2.metric("الفعاليات المجدولة", len(df_e))
     c3.metric("أهداف محققة", len(df_pl[df_pl['status'] == 'مكتمل']) if not df_pl.empty else 0)
-    c4.metric("متوسط الأثر", f"{df_i['impact_score'].mean():.1f}" if not df_i.empty and 'impact_score' in df_i.columns else "0.0")
+    c4.metric("تفاعل الشركاء", f"{(len(df_p[df_p['interaction_level'] == 'مرتفع'])/len(df_p)*100 if not df_p.empty else 0):.0f}%")
     
     st.divider()
     col_l, col_r = st.columns(2)
@@ -341,85 +340,14 @@ elif menu == "👨‍👩‍👧‍👦 الشركاء وأولياء الأمو
                 cl1, cl2 = st.columns([1, 2])
                 cl1.markdown(f"### 👤 {row['name']}")
                 cl1.caption(f"🛡️ {row['participation_type']} | {row['expertise']}")
-                if not df_i.empty and 'partner' in df_i.columns:
-                    linked = df_i[df_i['partner'] == row['name']]
+                if not df_e.empty and 'name' in df_e.columns:
+                    linked = df_e[df_e['name'].str.contains(row['name'], na=False)]
                     if not linked.empty:
-                        cl2.write("**🚀 المبادرات المرتبطة:**")
-                        for _, li in linked.iterrows(): cl2.info(f"🔹 {li['title']} ({li['status']})")
+                        cl2.write("**🚀 الفعاليات المرتبطة:**")
+                        for _, li in linked.iterrows(): cl2.info(f"🔹 {li['name']}")
                     else:
-                        cl2.write("➖ لا توجد مبادرات مرتبطة حالياً")
+                        cl2.write("➖ لا توجد فعاليات مرتبطة حالياً")
                 st.divider()
-
-elif menu == "🚀 إدارة المبادرات":
-    st.title("🚀 توثيق وإدارة المبادرات")
-    df_p = load_data("parents")
-    
-    if is_admin:
-        with st.expander("➕ توثيق مبادرة جديدة"):
-            with st.form("i_f"):
-                title = st.text_input("عنوان المبادرة")
-                partner = st.selectbox("الشريك المرتبط", ["بدون شريك"] + df_p['name'].tolist()) if not df_p.empty else st.text_input("الشريك")
-                desc = st.text_area("وصف المبادرة وأهدافها")
-                status = st.selectbox("الحالة الحالية", ["مخطط لها", "قيد التنفيذ", "مكتملة"])
-                impact = st.slider("مستوى الأثر (1-10)", 1, 10, 5)
-                if st.form_submit_button("حفظ المبادرة"):
-                    try:
-                        conn = get_connection()
-                        try:
-                            conn.execute("INSERT INTO initiatives (title, partner, description, status, impact_score) VALUES (?,?,?,?,?)", 
-                                         (title, partner, desc, status, impact))
-                        except Exception as e:
-                            if "no column named partner" in str(e):
-                                conn.execute("ALTER TABLE initiatives ADD COLUMN partner TEXT")
-                                conn.execute("INSERT INTO initiatives (title, partner, description, status, impact_score) VALUES (?,?,?,?,?)", 
-                                             (title, partner, desc, status, impact))
-                            else:
-                                raise e
-                        conn.commit()
-                        conn.close()
-                        
-                        # مزامنة سحابية
-                        if conn_gs:
-                            try:
-                                new_data = pd.DataFrame([{"العنوان": title, "الشريك": partner, "الوصف": desc, "الحالة": status, "الأثر": impact, "التاريخ": str(datetime.now())}])
-                                try:
-                                    existing = conn_gs.read(worksheet="Initiatives", ttl=0)
-                                    existing = existing.dropna(how='all')
-                                    updated = pd.concat([existing, new_data], ignore_index=True)
-                                except: updated = new_data
-                                conn_gs.update(worksheet="Initiatives", data=updated)
-                            except Exception as e:
-                                st.warning(f"⚠️ فشل تحديث Google Sheets (المبادرات): {e}")
-                        
-                        st.success("تم التوثيق والربط بنجاح")
-                        time.sleep(1)
-                        st.rerun()
-                    except Exception as e:
-                        st.error(f"خطأ في قاعدة البيانات: {e}")
-    
-    df_i = load_data("initiatives")
-    if not df_i.empty:
-        st.subheader("📋 سجل المبادرات")
-        if is_admin:
-            df_i['حذف'] = False
-            edited_i = st.data_editor(df_i, key="i_edit", use_container_width=True)
-            if st.button("🔴 حذف المبادرات المحددة"):
-                to_del = edited_i[edited_i['حذف'] == True]
-                if not to_del.empty:
-                    conn = get_connection()
-                    for rid in to_del['id']: conn.execute(f"DELETE FROM initiatives WHERE id={rid}")
-                    conn.commit(); conn.close()
-                    
-                    # تحديث السحاب
-                    if conn_gs:
-                        try:
-                            remaining = load_data("initiatives")
-                            conn_gs.update(worksheet="Initiatives", data=remaining.drop(columns=['id', 'حذف'], errors='ignore'))
-                        except Exception as e:
-                            st.warning(f"⚠️ فشل تحديث Google Sheets (المبادرات): {e}")
-                    st.rerun()
-        else:
-            st.dataframe(df_i.drop(columns=['id'], errors='ignore'), use_container_width=True)
 
 elif menu == "🎭 الفعاليات والأنشطة":
     st.title("🎭 إدارة الفعاليات والأنشطة")
@@ -476,25 +404,23 @@ elif menu == "🎭 الفعاليات والأنشطة":
 
 elif menu == "📈 التقارير والإحصائيات":
     st.title("📈 مركز التقارير والتحليلات")
-    df_i = load_data("initiatives")
+    df_e = load_data("events")
+    df_p = load_data("parents")
     
-    if not df_i.empty:
+    if not df_e.empty:
         col_c1, col_c2 = st.columns(2)
         with col_c1:
-            st.subheader("📊 أثر المبادرات")
-            if 'title' in df_i.columns and 'impact_score' in df_i.columns:
-                fig = px.bar(df_i, x='title', y='impact_score', color='status' if 'status' in df_i.columns else None,
-                             title="توزيع أثر المبادرات", 
-                             color_discrete_sequence=px.colors.qualitative.Safe)
-                st.plotly_chart(fig, use_container_width=True)
+            st.subheader("📊 حضور الفعاليات")
+            fig = px.bar(df_e, x='name', y='attendees_count', title="عدد الحضور حسب الفعالية")
+            st.plotly_chart(fig, use_container_width=True)
         
         with col_c2:
-            st.subheader("📋 توزيع الحالات")
-            if 'status' in df_i.columns:
-                fig_pie = px.pie(df_i, names='status', hole=0.3, title="نسبة إنجاز المبادرات")
+            st.subheader("👥 توزيع الشركاء")
+            if 'participation_type' in df_p.columns:
+                fig_pie = px.pie(df_p, names='participation_type', title="أنواع الشراكات")
                 st.plotly_chart(fig_pie, use_container_width=True)
     else:
-        st.info("لا توجد بيانات مبادرات كافية لتوليد التقارير")
+        st.info("لا توجد بيانات كافية لتوليد التقارير")
 
 elif menu == "🤖 الذكاء الاصطناعي":
     st.title("🤖 مركز الذكاء الاصطناعي الاستراتيجي")
@@ -502,18 +428,18 @@ elif menu == "🤖 الذكاء الاصطناعي":
     tab_gen, tab_swot, tab_reports = st.tabs(["✉️ توليد الخطابات", "🔍 التحليل الرباعي SWOT", "📊 تقارير الأداء"])
     
     df_p = load_data("parents")
-    df_i = load_data("initiatives")
+    df_e = load_data("events")
     
     with tab_gen:
         st.subheader("✉️ مولد المراسلات الرسمية")
         if not df_p.empty:
             p_name = st.selectbox("اختر الشريك المستهدف", df_p['name'].tolist())
-            doc_type = st.selectbox("نوع الخطاب", ["دعوة شراكة", "خطاب شكر", "تقرير إنجاز مبادرة"])
+            doc_type = st.selectbox("نوع الخطاب", ["دعوة شراكة", "خطاب شكر", "تقرير تعاون"])
             if st.button("توليد النص"):
                 if doc_type == "دعوة شراكة":
-                    st.info(f"إلى الأستاذ {p_name}، نود دعوتكم للمساهمة في مبادراتنا المجتمعية القادمة...")
+                    st.info(f"إلى الأستاذ {p_name}، نود دعوتكم للمساهمة في برامجنا المجتمعية القادمة...")
                 elif doc_type == "خطاب شكر":
-                    st.success(f"نتقدم بخالص الشكر والتقدير للأستاذ {p_name} على جهوده الملموسة في دعم مسيرة التنمية...")
+                    st.success(f"نتقدم بخالص الشكر والتقدير للأستاذ {p_name} على جهوده الملموسة...")
                 st.caption("يمكنك نسخ النص واستخدامه في مراسلاتك الرسمية.")
                 if st.button("تصدير كـ PDF"): st.warning("خاصية التصدير قيد التطوير")
         else:
@@ -524,7 +450,7 @@ elif menu == "🤖 الذكاء الاصطناعي":
         st.write("بناءً على البيانات الحالية، يقترح النظام التحليل التالي:")
         col1, col2 = st.columns(2)
         col1.success(f"**نقاط القوة:** وجود {len(df_p)} شركاء فاعلين.")
-        col2.warning(f"**نقاط الضعف:** الحاجة لزيادة عدد المبادرات المكتملة.")
+        col2.warning(f"**نقاط الضعف:** الحاجة لزيادة عدد الفعاليات المنجزة.")
         col1.info("**الفرص:** توسيع قاعدة الشراكات في المجالات المهنية.")
         col2.error("**التحديات:** تفاوت مستويات التفاعل بين الشركاء.")
 
@@ -533,6 +459,6 @@ elif menu == "🤖 الذكاء الاصطناعي":
         rep_type = st.radio("نوع التقرير", ["تقرير شهري", "تقرير فصلي", "تقرير سنوي"], horizontal=True)
         if st.button("توليد التقرير الإحصائي"):
             st.write(f"تقرير {rep_type} - تم توليده بتاريخ {datetime.now().strftime('%Y-%m-%d')}")
-            st.write(f"إجمالي المبادرات: {len(df_i)}")
-            st.write(f"نسبة الإنجاز: {(len(df_i[df_i['status']=='مكتملة'])/len(df_i)*100 if not df_i.empty else 0):.1f}%")
-            st.download_button("تحميل البيانات (Excel)", df_i.to_csv().encode('utf-8'), "report.csv", "text/csv")
+            st.write(f"إجمالي الفعاليات: {len(df_e)}")
+            st.write(f"إجمالي الشركاء: {len(df_p)}")
+            st.download_button("تحميل بيانات الشركاء (Excel)", df_p.to_csv().encode('utf-8'), "partners.csv", "text/csv")
