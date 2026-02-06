@@ -386,26 +386,41 @@ elif menu == "🎭 الفعاليات والأنشطة":
     df_e = load_data("events")
     if not df_e.empty:
         st.subheader("🗓️ جدول الفعاليات")
+        # ترجمة الأعمدة للعرض
+        display_df = df_e.rename(columns={
+            'name': 'الفعالية',
+            'date': 'التاريخ',
+            'location': 'المكان',
+            'attendees_count': 'الحضور المتوقع',
+            'rating': 'التقييم'
+        })
+        
         if is_admin:
-            df_e['حذف'] = False
-            edited_e = st.data_editor(df_e, key="e_edit", use_container_width=True)
+            display_df['حذف'] = False
+            edited_e = st.data_editor(display_df, key="e_edit", use_container_width=True)
             if st.button("🔴 حذف الفعاليات المحددة"):
                 to_del = edited_e[edited_e['حذف'] == True]
                 if not to_del.empty:
                     conn = get_connection()
-                    for rid in to_del['id']: conn.execute(f"DELETE FROM events WHERE id={rid}")
+                    # استخدام الاسم الأصلي للحذف
+                    for _, row in to_del.iterrows():
+                        # البحث عن المعرف الأصلي من df_e
+                        rid = df_e.iloc[row.name]['id']
+                        conn.execute(f"DELETE FROM events WHERE id={rid}")
                     conn.commit(); conn.close()
                     
                     # تحديث السحاب
                     if conn_gs:
                         try:
-                            remaining = load_data("events")
-                            conn_gs.update(worksheet="Events", data=remaining.drop(columns=['id', 'حذف'], errors='ignore'))
+                            remaining = load_data("events").rename(columns={
+                                'name': 'الفعالية', 'date': 'التاريخ', 'location': 'المكان', 'attendees_count': 'الحضور'
+                            })
+                            conn_gs.update(worksheet="Events", data=remaining.drop(columns=['id'], errors='ignore'))
                         except Exception as e:
                             st.warning(f"⚠️ فشل تحديث Google Sheets (الفعاليات): {e}")
                     st.rerun()
         else:
-            st.dataframe(df_e.drop(columns=['id'], errors='ignore'), use_container_width=True)
+            st.dataframe(display_df.drop(columns=['id', 'حذف'], errors='ignore'), use_container_width=True)
 
 elif menu == "📈 التقارير والإحصائيات":
     st.title("📈 مركز التقارير والتحليلات")
