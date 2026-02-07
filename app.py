@@ -69,6 +69,12 @@ st.markdown("""
         text-align: right;
     }
 
+    /* إخفاء شريط الأدوات العلوي والأيقونات */
+    header {visibility: hidden;}
+    #MainMenu {visibility: hidden;}
+    footer {visibility: hidden;}
+    .stDeployButton {display:none;}
+
     .stApp {
         background-color: #f4f7f9;
     }
