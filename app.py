@@ -125,15 +125,15 @@ st.markdown("""
     }
 
     /* شريط البحث */
-    .search-box {
-        background: rgba(255,255,255,0.9);
-        padding: 10px;
-        border-radius: 10px;
-        margin-bottom: 20px;
+    section[data-testid="stSidebar"] .stTextInput input {
+        color: #00008B !important; /* أزرق غامق */
+        background-color: white !important;
+        font-weight: bold !important;
     }
     
-    .search-box input {
-        color: #000000 !important;
+    section[data-testid="stSidebar"] .stTextInput label p {
+        color: #ecf0f1 !important;
+        font-weight: bold !important;
     }
 
     h1 { color: #2c3e50; border-right: 8px solid #34495e; padding-right: 15px; }
