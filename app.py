@@ -386,20 +386,38 @@ elif menu == "👨‍👩‍👧‍👦 الشركاء وأولياء الأمو
     df_p = load_data("parents")
     if not df_p.empty:
         st.subheader("🔍 استعراض الشركاء والربط الذكي")
+        
+        # ترجمة الأعمدة للعرض
         display_p = df_p.rename(columns={
             'name': 'الاسم', 'participation_type': 'نوع المشاركة',
             'expertise': 'الخبرة/المجال', 'interaction_level': 'مستوى التفاعل',
             'phone': 'رقم الهاتف'
         })
         
+        # إعادة وظيفة رابط واتساب الذكي
+        def make_ai_whatsapp_link(row):
+            phone = row.get('رقم الهاتف')
+            name = row.get('الاسم')
+            p_type = row.get('نوع المشاركة')
+            if phone and name:
+                message = f"""الأخ الفاضل الأستاذ {name} المحترم،،\n\nالسلام عليكم ورحمة الله وبركاته..\nيسرنا في قسم تنمية العلاقات المجتمعية أن نتقدم لشخصكم الكريم بخالص الشكر على مساهماتكم في مجال ({p_type}). نتطلع دوماً لاستمرار هذا التعاون المثمر.\n\nتفضلوا بقبول فائق التقدير،،\nمشرف تنمية العلاقات المجتمعية"""
+                clean_phone = ''.join(filter(str.isdigit, str(phone)))
+                encoded_msg = message.replace(' ', '%20').replace('\n', '%0A')
+                return f"https://api.whatsapp.com/send?phone={clean_phone}&text={encoded_msg}"
+            return ""
+
         if is_admin:
+            display_p['واتساب الذكي'] = display_p.apply(make_ai_whatsapp_link, axis=1)
             display_p['حذف'] = False
             edited_p = st.data_editor(
                 display_p, 
                 key="p_edit", 
                 use_container_width=True, 
                 num_rows="dynamic",
-                column_config={"id": st.column_config.NumberColumn("ID", disabled=True)}
+                column_config={
+                    "id": st.column_config.NumberColumn("ID", disabled=True),
+                    "واتساب الذكي": st.column_config.LinkColumn("🤖 مراسلة ذكية", display_text="إرسال شكر ذكي")
+                }
             )
             
             c_p1, c_p2 = st.columns(2)
