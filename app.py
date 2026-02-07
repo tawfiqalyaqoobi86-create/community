@@ -202,14 +202,47 @@ def sync_data_from_gs():
     conn.close()
 
 # --- القائمة الجانبية ---
-# الساعة والتاريخ
-local_now = datetime.utcnow() + timedelta(hours=4)
-st.sidebar.markdown(f"""
-    <div style="text-align: center; padding: 10px; border-bottom: 1px solid #3e4f5f;">
-        <p style="color: #bdc3c7; font-size: 1.4rem; font-weight: 700; margin:0;">🕒 {local_now.strftime('%I:%M %p')}</p>
-        <p style="color: #95a5a6; font-size: 0.8rem; margin:0;">📅 {local_now.strftime('%Y-%m-%d')}</p>
-    </div>
-""", unsafe_allow_html=True)
+# الساعة والتاريخ (ساعة حية)
+with st.sidebar:
+    st.components.v1.html(f"""
+        <style>
+            @import url('https://fonts.googleapis.com/css2?family=Cairo:wght@700&display=swap');
+            body {{
+                background-color: transparent;
+                margin: 0;
+                display: flex;
+                flex-direction: column;
+                align-items: center;
+                justify-content: center;
+                font-family: 'Cairo', sans-serif;
+                overflow: hidden;
+            }}
+            #time {{ color: #bdc3c7; font-size: 1.4rem; font-weight: 700; margin:0; }}
+            #date {{ color: #95a5a6; font-size: 0.8rem; margin:0; }}
+        </style>
+        <div id="time">🕒 --:--:--</div>
+        <div id="date">📅 ----</div>
+        <script>
+            function update() {{
+                const now = new Date();
+                // تعديل الوقت ليكون UTC+4 (توقيت عمان/الإمارات)
+                const utc = now.getTime() + (now.getTimezoneOffset() * 60000);
+                const gmt4 = new Date(utc + (3600000 * 4));
+                
+                const h = gmt4.getHours();
+                const m = gmt4.getMinutes().toString().padStart(2, '0');
+                const s = gmt4.getSeconds().toString().padStart(2, '0');
+                const ampm = h >= 12 ? 'PM' : 'AM';
+                const hours = (h % 12 || 12).toString().padStart(2, '0');
+                
+                document.getElementById('time').innerText = '🕒 ' + hours + ':' + m + ':' + s + ' ' + ampm;
+                document.getElementById('date').innerText = '📅 ' + gmt4.toISOString().split('T')[0];
+            }}
+            setInterval(update, 1000);
+            update();
+        </script>
+    """, height=90)
+    st.sidebar.markdown('<div style="border-bottom: 1px solid #3e4f5f; margin-bottom: 10px;"></div>', unsafe_allow_html=True)
 
 # البحث الذكي
 st.sidebar.markdown('<div class="search-box">', unsafe_allow_html=True)
