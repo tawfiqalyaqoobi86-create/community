@@ -495,7 +495,7 @@ elif menu == "👨‍👩‍👧‍👦 الشركاء وأولياء الأمو
             if phone:
                 # تنظيف الرقم من المسافات أو الرموز
                 clean_phone = ''.join(filter(str.isdigit, str(phone)))
-                return f"https://wa.me/{clean_phone}"
+                return f"https://api.whatsapp.com/send?phone={clean_phone}"
             return ""
 
         display_p['واتساب'] = display_p['رقم الهاتف'].apply(make_whatsapp_link)
@@ -561,7 +561,7 @@ elif menu == "👨‍👩‍👧‍👦 الشركاء وأولياء الأمو
                 # إضافة زر واتساب للبطاقة
                 if row.get('phone'):
                     clean_p = ''.join(filter(str.isdigit, str(row['phone'])))
-                    wa_url = f"https://wa.me/{clean_p}"
+                    wa_url = f"https://api.whatsapp.com/send?phone={clean_p}"
                     cl1.markdown(f"[📲 تواصل عبر واتساب]({wa_url})")
                 
                 if not df_e.empty and 'name' in df_e.columns:
