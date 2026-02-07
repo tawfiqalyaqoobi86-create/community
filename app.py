@@ -189,15 +189,14 @@ def sync_data_from_gs(force=False):
     
     for table, cfg in config.items():
         try:
-            # قراءة البيانات
-            df_gs = conn_gs.read(worksheet=cfg["ws"], ttl=0)
+            # استخدام الرابط بشكل صريح من الإعدادات لتفادي مشاكل الترميز
+            sheet_url = st.secrets["connections"]["gsheets"]["spreadsheet"]
+            df_gs = conn_gs.read(spreadsheet=sheet_url, worksheet=cfg["ws"], ttl=0)
+            
             if df_gs is not None and not df_gs.empty:
                 df_gs = df_gs.dropna(how='all')
-                # تنظيف أسماء الأعمدة
                 df_gs.columns = df_gs.columns.str.strip()
-                # إعادة التسمية بناءً على الخريطة
                 final_df = df_gs.rename(columns=cfg["map"])
-                # الاحتفاظ بالأعمدة المطلوبة فقط والموجودة فعلياً
                 needed_cols = list(cfg["map"].values())
                 final_df = final_df[[c for c in needed_cols if c in final_df.columns]]
                 
@@ -205,9 +204,10 @@ def sync_data_from_gs(force=False):
                     conn.execute(f"DELETE FROM {table}")
                     final_df.to_sql(table, conn, if_exists='append', index=False)
                     success_count += 1
-                    st.sidebar.success(f"✅ تم استيراد '{cfg['ws']}' بنجاح")
+                    st.sidebar.success(f"✅ تم استيراد '{cfg['ws']}'")
         except Exception as e:
-            st.sidebar.warning(f"⚠️ تعذر جلب '{cfg['ws']}': {str(e)[:50]}...")
+            # استخدام repr لتفادي أخطاء الترميز عند عرض الخطأ نفسه
+            st.sidebar.warning(f"⚠️ تعذر جلب '{cfg['ws']}': {repr(e)[:100]}")
             
     conn.close()
     return success_count
@@ -241,20 +241,19 @@ def push_to_gs(table):
         df_local = pd.read_sql(f"SELECT * FROM {table}", conn)
         
         if not df_local.empty:
-            # تحضير البيانات للرفع
+            sheet_url = st.secrets["connections"]["gsheets"]["spreadsheet"]
             df_to_push = df_local.drop(columns=['id'], errors='ignore').rename(columns=config[table]["map"])
-            # التأكد من ترتيب الأعمدة كما في الخريطة
             cols_order = list(config[table]["map"].values())
             df_to_push = df_to_push[[c for c in cols_order if c in df_to_push.columns]]
             
-            # محاولة التحديث
-            conn_gs.update(worksheet=config[table]["ws"], data=df_to_push)
+            # محاولة التحديث باستخدام الرابط الصريح
+            conn_gs.update(spreadsheet=sheet_url, worksheet=config[table]["ws"], data=df_to_push)
             st.sidebar.success(f"☁️ تم تحديث سحابة '{config[table]['ws']}'")
         else:
             st.sidebar.info(f"ℹ️ جدول {config[table]['ws']} فارغ محلياً")
             
     except Exception as e:
-        st.sidebar.error(f"❌ فشل تحديث {config[table]['ws']}: {str(e)[:50]}")
+        st.sidebar.error(f"❌ فشل تحديث السحابة: {repr(e)[:100]}")
     finally:
         conn.close()
 
