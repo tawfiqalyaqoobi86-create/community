@@ -299,7 +299,7 @@ elif menu == "📅 خطة العمل":
                 obj = st.text_input("الهدف")
                 act = st.text_input("النشاط")
                 resp = st.text_input("المسؤول")
-                timeframe = st.text_input("الجدول الزمني")
+                timeframe = st.date_input("الجدول الزمني")
                 kpi = st.text_input("مؤشر الأداء (KPI)")
                 col_p, col_t = st.columns(2)
                 with col_p:
@@ -311,14 +311,14 @@ elif menu == "📅 خطة العمل":
                     conn = get_connection()
                     try:
                         conn.execute("INSERT INTO action_plan (objective, activity, responsibility, timeframe, kpi, priority, status, task_type) VALUES (?,?,?,?,?,?,'قيد التنفيذ',?)", 
-                                     (obj, act, resp, timeframe, kpi, prio, t_type))
+                                     (obj, act, resp, str(timeframe), kpi, prio, t_type))
                         conn.commit()
                         conn.close()
                         
                         # مزامنة سحابية
                         if conn_gs:
                             try:
-                                new_data = pd.DataFrame([{"الهدف": obj, "النشاط": act, "المسؤول": resp, "الزمن": timeframe, "KPI": kpi, "الأولوية": prio, "النوع": t_type, "الحالة": "قيد التنفيذ"}])
+                                new_data = pd.DataFrame([{"الهدف": obj, "النشاط": act, "المسؤول": resp, "الزمن": str(timeframe), "KPI": kpi, "الأولوية": prio, "النوع": t_type, "الحالة": "قيد التنفيذ"}])
                                 try:
                                     existing = conn_gs.read(worksheet="ActionPlan", ttl=0)
                                     existing = existing.dropna(how='all')
@@ -335,7 +335,7 @@ elif menu == "📅 خطة العمل":
                             conn.execute("ALTER TABLE action_plan ADD COLUMN task_type TEXT DEFAULT 'معنوي'")
                             conn.commit()
                             conn.execute("INSERT INTO action_plan (objective, activity, responsibility, timeframe, kpi, priority, status, task_type) VALUES (?,?,?,?,?,?,'قيد التنفيذ',?)", 
-                                         (obj, act, resp, timeframe, kpi, prio, t_type))
+                                         (obj, act, resp, str(timeframe), kpi, prio, t_type))
                             conn.commit()
                             conn.close()
                             st.success("تم التحديث والحفظ")
@@ -365,7 +365,10 @@ elif menu == "📅 خطة العمل":
                 key="plan_edit", 
                 use_container_width=True, 
                 num_rows="dynamic",
-                column_config={"id": st.column_config.NumberColumn("ID", disabled=True)}
+                column_config={
+                    "id": st.column_config.NumberColumn("ID", disabled=True),
+                    "الجدول الزمني": st.column_config.DateColumn("الجدول الزمني")
+                }
             )
             
             c_del, c_save = st.columns(2)
