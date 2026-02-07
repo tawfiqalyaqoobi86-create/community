@@ -10,13 +10,29 @@ from streamlit_gsheets import GSheetsConnection
 if 'sidebar_state' not in st.session_state:
     st.session_state.sidebar_state = "expanded"
 
-st.set_page_config(
-    page_title="مساعد مشرف تنمية العلاقات المجتمعية", 
-    layout="wide", 
-    initial_sidebar_state=st.session_state.sidebar_state
-)
+st.set_page_config(page_title="مساعد مشرف تنمية العلاقات المجتمعية", layout="wide")
 
-# زر مخصص لتبديل القائمة الجانبية
+# تحكم CSS ديناميكي للقائمة الجانبية
+if st.session_state.sidebar_state == "collapsed":
+    sidebar_style = """
+        <style>
+            [data-testid="stSidebar"] {display: none !important;}
+            [data-testid="stSidebarCollapsedControl"] {display: none !important;}
+            .stMain {width: 100% !important; margin-right: 0 !important; margin-left: 0 !important;}
+            header {display: none !important;}
+        </style>
+    """
+else:
+    sidebar_style = """
+        <style>
+            [data-testid="stSidebar"] {display: block !important;}
+            [data-testid="stSidebarCollapsedControl"] {display: none !important;}
+            header {display: none !important;}
+        </style>
+    """
+st.markdown(sidebar_style, unsafe_allow_html=True)
+
+# زر مخصص لتبديل القائمة الجانبية في أعلى الصفحة
 col_side, _ = st.columns([1, 10])
 btn_label = "📂 إظهار القائمة" if st.session_state.sidebar_state == "collapsed" else "📁 إخفاء القائمة"
 if col_side.button(btn_label):
