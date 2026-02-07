@@ -490,15 +490,23 @@ elif menu == "👨‍👩‍👧‍👦 الشركاء وأولياء الأمو
             'phone': 'رقم الهاتف'
         })
         
-        # إضافة عمود لرابط واتساب
-        def make_whatsapp_link(phone):
-            if phone:
-                # تنظيف الرقم من المسافات أو الرموز
+        # إضافة عمود لرابط واتساب الذكي
+        def make_ai_whatsapp_link(row):
+            phone = row.get('رقم الهاتف')
+            name = row.get('الاسم')
+            p_type = row.get('نوع المشاركة')
+            
+            if phone and name:
+                # صياغة الرسالة بالذكاء الاصطناعي المبسط
+                message = f"السلام عليكم ورحمة الله وبركاته، الأستاذ {name}. نتقدم لكم بخالص الشكر والتقدير على مساهماتكم القيمة معنا في مجال ({p_type}). نحن ممتنون جداً لدوركم الفعال في تنمية العلاقات المجتمعية. نسأل الله لكم التوفيق."
+                
+                # تنظيف الرقم وتجهيز الرابط
                 clean_phone = ''.join(filter(str.isdigit, str(phone)))
-                return f"https://api.whatsapp.com/send?phone={clean_phone}"
+                encoded_msg = message.replace(' ', '%20').replace('\n', '%0A')
+                return f"https://api.whatsapp.com/send?phone={clean_phone}&text={encoded_msg}"
             return ""
 
-        display_p['واتساب'] = display_p['رقم الهاتف'].apply(make_whatsapp_link)
+        display_p['واتساب الذكي'] = display_p.apply(make_ai_whatsapp_link, axis=1)
         
         if is_admin:
             display_p['حذف'] = False
@@ -509,7 +517,7 @@ elif menu == "👨‍👩‍👧‍👦 الشركاء وأولياء الأمو
                 num_rows="dynamic",
                 column_config={
                     "id": st.column_config.NumberColumn("ID", disabled=True),
-                    "واتساب": st.column_config.LinkColumn("📲 إرسال", display_text="إرسال رسالة")
+                    "واتساب الذكي": st.column_config.LinkColumn("🤖 مراسلة ذكية", display_text="إرسال شكر ذكي")
                 }
             )
             
@@ -558,11 +566,15 @@ elif menu == "👨‍👩‍👧‍👦 الشركاء وأولياء الأمو
                 cl1.markdown(f"### 👤 {row['name']}")
                 cl1.caption(f"🛡️ {row['participation_type']} | {row['expertise']}")
                 
-                # إضافة زر واتساب للبطاقة
+                # إضافة زر واتساب ذكي للبطاقة
                 if row.get('phone'):
+                    name = row.get('name')
+                    p_type = row.get('participation_type')
                     clean_p = ''.join(filter(str.isdigit, str(row['phone'])))
-                    wa_url = f"https://api.whatsapp.com/send?phone={clean_p}"
-                    cl1.markdown(f"[📲 تواصل عبر واتساب]({wa_url})")
+                    message = f"السلام عليكم ورحمة الله وبركاته الأستاذ {name}، نتقدم لكم بخالص الشكر لمساهمتكم في ({p_type})."
+                    encoded_msg = message.replace(' ', '%20')
+                    wa_url = f"https://api.whatsapp.com/send?phone={clean_p}&text={encoded_msg}"
+                    cl1.markdown(f"[🤖 إرسال شكر ذكي]({wa_url})")
                 
                 if not df_e.empty and 'name' in df_e.columns:
                     linked = df_e[df_e['name'].str.contains(row['name'], na=False)]
