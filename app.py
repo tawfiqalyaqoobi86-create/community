@@ -197,19 +197,20 @@ def sync_data_from_gs(force=False):
     conn = get_connection()
     success_count = 0
     
+    # محاولة معرفة ما يراه البرنامج داخل ملفك
     try:
-        # محاولة جلب البيانات لمعرفة أسماء الصفحات المتاحة
-        # ملاحظة: بعض الإصدارات لا تدعم جلب الأسماء مباشرة، لذا سنعتمد على الخطأ لإرشادنا
-        st.sidebar.write("🔍 جاري فحص التبويبات...")
+        # قراءة الصفحة الرئيسية لمحاولة استخراج كافة أسماء التبويبات
+        st.sidebar.info("🔎 جاري فحص الملف...")
     except: pass
 
     for table, (ws, mapping) in tables_map.items():
         try:
-            # محاولة القراءة (بدون تحديد ttl لضمان أحدث البيانات)
-            gs_df = conn_gs.read(worksheet=ws, ttl=0)
+            # محاولة قراءة الصفحة المطلوبة
+            # استخدام الرابط المباشر من الأسرار لضمان دقة الاتصال
+            spreadsheet_url = st.secrets["connections"]["gsheets"]["spreadsheet"]
+            gs_df = conn_gs.read(spreadsheet=spreadsheet_url, worksheet=ws, ttl=0)
             
             if gs_df is not None:
-                # تنظيف البيانات
                 gs_df = gs_df.dropna(how='all')
                 if not gs_df.empty:
                     gs_df.columns = gs_df.columns.str.strip()
@@ -221,11 +222,14 @@ def sync_data_from_gs(force=False):
                         conn.execute(f"DELETE FROM {table}")
                         to_insert.to_sql(table, conn, if_exists='append', index=False)
                         success_count += 1
-                        st.sidebar.success(f"💎 تمت مزامنة {ws}")
+                        st.sidebar.success(f"✅ تم ربط {ws}")
         except Exception as gs_err:
-            st.sidebar.warning(f"⚠️ التبويب '{ws}' غير موجود أو فارغ")
-            # إظهار رسالة مساعدة للمستخدم
-            st.sidebar.info(f"تأكد أن اسم الصفحة في الأسفل هو {ws} تماماً بدون مسافات.")
+            error_msg = str(gs_err)
+            if "Worksheet not found" in error_msg:
+                st.sidebar.warning(f"❌ لم نجد صفحة باسم '{ws}'")
+                st.sidebar.caption("تأكد من عدم وجود مسافات مخفية في اسم الورقة")
+            else:
+                st.sidebar.error(f"⚠️ خطأ في {ws}: {error_msg[:100]}")
             
     conn.close()
     return success_count
