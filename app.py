@@ -7,7 +7,7 @@ import time
 from streamlit_gsheets import GSheetsConnection
 
 # إعدادات الصفحة
-st.set_page_config(page_title="مساعد مشرف تنمية العلاقات المجتمعية", layout="wide", initial_sidebar_state="auto")
+st.set_page_config(page_title="مساعد مشرف تنمية العلاقات المجتمعية", layout="wide", initial_sidebar_state="collapsed")
 
 # تهيئة قاعدة البيانات المحلية
 init_db()
@@ -63,12 +63,17 @@ st.markdown("""
     <style>
     @import url('https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700;800&family=Almarai:wght@400;700&display=swap');
     
-    html, body, [class*="st-"] {
+    html, body, [data-testid="stAppViewContainer"] {
         font-family: 'Cairo', 'Almarai', sans-serif;
         direction: RTL;
         text-align: right;
     }
     
+    /* منع التداخل مع القائمة الجانبية */
+    [data-testid="stSidebar"] {
+        direction: RTL;
+    }
+
     .stApp {
         background-color: #f4f7f9;
     }
