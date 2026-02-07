@@ -134,7 +134,58 @@ def load_data(table):
         try: df = pd.read_sql(f"SELECT * FROM {table}", conn)
         except: df = pd.DataFrame()
     conn.close()
+    
+    # إذا كانت البيانات فارغة محلياً وهناك اتصال بجوجل شيت، نحاول المزامنة
+    if df.empty and conn_gs:
+        sync_data_from_gs()
+        # محاولة التحميل مرة أخرى بعد المزامنة
+        conn = get_connection()
+        try: df = pd.read_sql(f"SELECT * FROM {table}", conn)
+        except: df = pd.DataFrame()
+        conn.close()
+        
     return df
+
+def sync_data_from_gs():
+    if not conn_gs:
+        return
+    
+    tables_map = {
+        "action_plan": ("ActionPlan", {
+            "الهدف": "objective", "النشاط": "activity", "المسؤول": "responsibility", 
+            "الزمن": "timeframe", "KPI": "kpi", "الأولوية": "priority", 
+            "النوع": "task_type", "الحالة": "status"
+        }),
+        "parents": ("Parents", {
+            "الاسم": "name", "النوع": "participation_type", 
+            "الخبرة": "expertise", "التفاعل": "interaction_level"
+        }),
+        "events": ("Events", {
+            "الفعالية": "name", "التاريخ": "date", 
+            "المكان": "location", "الحضور": "attendees_count"
+        })
+    }
+    
+    conn = get_connection()
+    for table, (ws, mapping) in tables_map.items():
+        try:
+            # التحقق إذا كان الجدول فارغاً
+            local_count = pd.read_sql(f"SELECT COUNT(*) as count FROM {table}", conn).iloc[0]['count']
+            if local_count == 0:
+                gs_df = conn_gs.read(worksheet=ws, ttl=0)
+                if not gs_df.empty:
+                    gs_df = gs_df.dropna(how='all')
+                    # إعادة تسمية الأعمدة للمطابقة مع قاعدة البيانات
+                    to_insert = gs_df.rename(columns=mapping)
+                    # الاحتفاظ فقط بالأعمدة الموجودة في الجدول
+                    cols = list(mapping.values())
+                    to_insert = to_insert[[c for c in cols if c in to_insert.columns]]
+                    
+                    if not to_insert.empty:
+                        to_insert.to_sql(table, conn, if_exists='append', index=False)
+        except Exception as e:
+            st.sidebar.warning(f"⚠️ فشل مزامنة {table}: {e}")
+    conn.close()
 
 # --- القائمة الجانبية ---
 # الساعة والتاريخ
@@ -313,6 +364,14 @@ elif menu == "📅 خطة العمل":
                         if not pd.isna(rid):
                             conn.execute(f"DELETE FROM action_plan WHERE id={rid}")
                     conn.commit(); conn.close()
+                    
+                    # مزامنة سحابية بعد الحذف
+                    if conn_gs:
+                        try:
+                            gs_data = edited_df[edited_df['حذف'] == False].drop(columns=['id', 'حذف'], errors='ignore')
+                            conn_gs.update(worksheet="ActionPlan", data=gs_data)
+                        except: pass
+                        
                     st.success("تم الحذف بنجاح")
                     st.rerun()
             
@@ -414,6 +473,14 @@ elif menu == "👨‍👩‍👧‍👦 الشركاء وأولياء الأمو
                         if not pd.isna(rid):
                             conn.execute(f"DELETE FROM parents WHERE id={rid}")
                     conn.commit(); conn.close()
+                    
+                    # مزامنة سحابية بعد الحذف
+                    if conn_gs:
+                        try:
+                            gs_data_p = edited_p[edited_p['حذف'] == False].drop(columns=['id', 'حذف'], errors='ignore')
+                            conn_gs.update(worksheet="Parents", data=gs_data_p)
+                        except: pass
+                        
                     st.success("تم الحذف بنجاح")
                     st.rerun()
             
@@ -537,6 +604,14 @@ elif menu == "🎭 الفعاليات والأنشطة":
                         if 'id' in row and not pd.isna(row['id']):
                             conn.execute(f"DELETE FROM events WHERE id={row['id']}")
                     conn.commit(); conn.close()
+                    
+                    # مزامنة سحابية بعد الحذف
+                    if conn_gs:
+                        try:
+                            gs_data_e = edited_e[edited_e['حذف'] == False].drop(columns=['id', 'حذف'], errors='ignore')
+                            conn_gs.update(worksheet="Events", data=gs_data_e)
+                        except: pass
+                        
                     st.success("تم الحذف بنجاح")
                     st.rerun()
             
