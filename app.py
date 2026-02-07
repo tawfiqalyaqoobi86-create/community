@@ -7,7 +7,7 @@ import time
 from streamlit_gsheets import GSheetsConnection
 
 # إعدادات الصفحة
-st.set_page_config(page_title="مساعد مشرف تنمية العلاقات المجتمعية", layout="wide", initial_sidebar_state="auto")
+st.set_page_config(page_title="مساعد مشرف تنمية العلاقات المجتمعية", layout="wide", initial_sidebar_state="expanded")
 
 # تهيئة قاعدة البيانات المحلية
 init_db()
@@ -59,6 +59,14 @@ if not is_admin:
         #MainMenu {visibility: hidden;}
         footer {visibility: hidden;}
         header {visibility: hidden;}
+        /* إخفاء زر إغلاق القائمة الجانبية للزوار */
+        [data-testid="stSidebarCollapseButton"] {
+            display: none !important;
+        }
+        /* منع سحب القائمة في الهواتف */
+        [data-testid="collapsedControl"] {
+            display: none !important;
+        }
         </style>
         """, unsafe_allow_html=True)
 
