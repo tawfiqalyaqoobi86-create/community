@@ -177,17 +177,17 @@ def sync_data_from_gs(force=False):
     init_db()
     
     tables_map = {
-        "action_plan": ("ActionPlan", {
+        "action_plan": ("الخطة", {
             "الهدف": "objective", "النشاط": "activity", "المسؤول": "responsibility", 
             "الزمن": "timeframe", "KPI": "kpi", "الأولوية": "priority", 
             "النوع": "task_type", "الحالة": "status"
         }),
-        "parents": ("Parents", {
+        "parents": ("الشركاء", {
             "الاسم": "name", "النوع": "participation_type", 
             "الخبرة": "expertise", "التفاعل": "interaction_level",
             "الهاتف": "phone"
         }),
-        "events": ("Events", {
+        "events": ("الفعاليات", {
             "الفعالية": "name", "التاريخ": "date", 
             "المكان": "location", "الحضور": "attendees_count",
             "التقييم": "rating"
@@ -197,16 +197,8 @@ def sync_data_from_gs(force=False):
     conn = get_connection()
     success_count = 0
     
-    # محاولة معرفة ما يراه البرنامج داخل ملفك
-    try:
-        # قراءة الصفحة الرئيسية لمحاولة استخراج كافة أسماء التبويبات
-        st.sidebar.info("🔎 جاري فحص الملف...")
-    except: pass
-
     for table, (ws, mapping) in tables_map.items():
         try:
-            # محاولة قراءة الصفحة المطلوبة
-            # استخدام الرابط المباشر من الأسرار لضمان دقة الاتصال
             spreadsheet_url = st.secrets["connections"]["gsheets"]["spreadsheet"]
             gs_df = conn_gs.read(spreadsheet=spreadsheet_url, worksheet=ws, ttl=0)
             
@@ -224,12 +216,7 @@ def sync_data_from_gs(force=False):
                         success_count += 1
                         st.sidebar.success(f"✅ تم ربط {ws}")
         except Exception as gs_err:
-            error_msg = str(gs_err)
-            if "Worksheet not found" in error_msg:
-                st.sidebar.warning(f"❌ لم نجد صفحة باسم '{ws}'")
-                st.sidebar.caption("تأكد من عدم وجود مسافات مخفية في اسم الورقة")
-            else:
-                st.sidebar.error(f"⚠️ خطأ في {ws}: {error_msg[:100]}")
+            st.sidebar.warning(f"⚠️ لم نجد صفحة باسم '{ws}'")
             
     conn.close()
     return success_count
@@ -237,21 +224,20 @@ def sync_data_from_gs(force=False):
 def push_to_gs(table):
     """رفع كافة البيانات المحلية لجدول معين إلى جوجل شيت لضمان الثبات"""
     if not conn_gs:
-        st.sidebar.error("❌ لا يوجد اتصال بجوجل شيت")
         return
     
     tables_map = {
-        "action_plan": ("ActionPlan", {
+        "action_plan": ("الخطة", {
             "objective": "الهدف", "activity": "النشاط", "responsibility": "المسؤول", 
             "timeframe": "الزمن", "kpi": "KPI", "priority": "الأولوية", 
             "task_type": "النوع", "status": "الحالة"
         }),
-        "parents": ("Parents", {
+        "parents": ("الشركاء", {
             "name": "الاسم", "participation_type": "النوع", 
             "expertise": "الخبرة", "interaction_level": "التفاعل",
             "phone": "الهاتف"
         }),
-        "events": ("Events", {
+        "events": ("الفعاليات", {
             "name": "الفعالية", "date": "التاريخ", 
             "location": "المكان", "attendees_count": "الحضور",
             "rating": "التقييم"
@@ -263,21 +249,17 @@ def push_to_gs(table):
         conn = get_connection()
         try:
             df = pd.read_sql(f"SELECT * FROM {table}", conn)
-            # تجهيز البيانات للرفع (ترجمة الأعمدة)
             if not df.empty:
                 to_upload = df.drop(columns=['id'], errors='ignore').rename(columns=mapping)
-                # التأكد من وجود كافة الأعمدة المطلوبة في الم mapping
                 cols_to_keep = [c for c in mapping.values() if c in to_upload.columns]
                 to_upload = to_upload[cols_to_keep]
+                conn_gs.update(worksheet=ws_name, data=to_upload)
+                st.sidebar.success(f"☁️ تم تحديث {ws_name}")
             else:
-                to_upload = pd.DataFrame(columns=list(mapping.values()))
-            
-            # محاولة التحديث
-            conn_gs.update(worksheet=ws_name, data=to_upload)
-            st.sidebar.success(f"☁️ تم تحديث {ws_name} في السحاب")
+                empty_df = pd.DataFrame(columns=list(mapping.values()))
+                conn_gs.update(worksheet=ws_name, data=empty_df)
         except Exception as e:
-            st.sidebar.error(f"❌ فشل الحفظ في {ws_name}: {str(e)}")
-            st.sidebar.info("تأكد من وجود صفحة بهذا الاسم بالضبط في ملف جوجل شيت.")
+            st.sidebar.error(f"❌ فشل الحفظ في {ws_name}")
         finally:
             conn.close()
 
