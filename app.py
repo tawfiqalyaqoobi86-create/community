@@ -69,8 +69,8 @@ st.markdown("""
         text-align: right;
     }
 
-    /* إخفاء شريط الأدوات العلوي والأيقونات */
-    header {visibility: hidden;}
+    /* إخفاء أيقونات المشاركة والإعدادات مع الإبقاء على زر القائمة */
+    [data-testid="stHeaderActionElements"] {display: none;}
     #MainMenu {visibility: hidden;}
     footer {visibility: hidden;}
     .stDeployButton {display:none;}
