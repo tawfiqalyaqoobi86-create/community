@@ -163,7 +163,7 @@ def load_data(table):
         
     return df
 
-def sync_data_from_gs():
+def sync_data_from_gs(force=False):
     if not conn_gs:
         return
     
@@ -185,25 +185,32 @@ def sync_data_from_gs():
     }
     
     conn = get_connection()
+    success_count = 0
     for table, (ws, mapping) in tables_map.items():
         try:
-            # التحقق إذا كان الجدول فارغاً
+            # التحقق إذا كان الجدول فارغاً أو إذا كان طلباً يدوياً (force)
             local_count = pd.read_sql(f"SELECT COUNT(*) as count FROM {table}", conn).iloc[0]['count']
-            if local_count == 0:
+            if local_count == 0 or force:
                 gs_df = conn_gs.read(worksheet=ws, ttl=0)
-                if not gs_df.empty:
+                if gs_df is not None and not gs_df.empty:
                     gs_df = gs_df.dropna(how='all')
-                    # إعادة تسمية الأعمدة للمطابقة مع قاعدة البيانات
+                    # تنظيف أسماء الأعمدة من المسافات
+                    gs_df.columns = gs_df.columns.str.strip()
+                    # إعادة تسمية الأعمدة للمطابقة
                     to_insert = gs_df.rename(columns=mapping)
                     # الاحتفاظ فقط بالأعمدة الموجودة في الجدول
                     cols = list(mapping.values())
                     to_insert = to_insert[[c for c in cols if c in to_insert.columns]]
                     
                     if not to_insert.empty:
+                        if force: # في حال الاستيراد اليدوي، نمسح المحلي أولاً لتجنب التكرار
+                            conn.execute(f"DELETE FROM {table}")
                         to_insert.to_sql(table, conn, if_exists='append', index=False)
+                        success_count += 1
         except Exception as e:
-            st.sidebar.warning(f"⚠️ فشل مزامنة {table}: {e}")
+            st.sidebar.error(f"⚠️ فشل مزامنة {table}: {e}")
     conn.close()
+    return success_count
 
 # --- القائمة الجانبية ---
 # الساعة والتاريخ (ساعة حية)
@@ -247,6 +254,22 @@ with st.sidebar:
         </script>
     """, height=90)
     st.sidebar.markdown('<div style="border-bottom: 1px solid #3e4f5f; margin-bottom: 10px;"></div>', unsafe_allow_html=True)
+    
+    # حالة الاتصال بالسحاب وزر المزامنة
+    if conn_gs:
+        st.sidebar.success("✅ متصل بـ Google Sheets")
+        if st.sidebar.button("🔄 استعادة البيانات من السحاب"):
+            with st.spinner("جاري استعادة البيانات..."):
+                count = sync_data_from_gs(force=True)
+                if count > 0:
+                    st.sidebar.success(f"تمت استعادة {count} جداول")
+                    time.sleep(1)
+                    st.rerun()
+                else:
+                    st.sidebar.warning("لم يتم العثور على بيانات جديدة")
+    else:
+        st.sidebar.error("❌ غير متصل بـ Google Sheets")
+        st.sidebar.info("تأكد من إعداد Secrets في Streamlit Cloud")
 
 # البحث الذكي
 st.sidebar.markdown('<div class="search-box">', unsafe_allow_html=True)
