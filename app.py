@@ -126,10 +126,14 @@ st.markdown("""
 
     /* شريط البحث */
     .search-box {
-        background: rgba(255,255,255,0.1);
+        background: rgba(255,255,255,0.9);
         padding: 10px;
         border-radius: 10px;
         margin-bottom: 20px;
+    }
+    
+    .search-box input {
+        color: #000000 !important;
     }
 
     h1 { color: #2c3e50; border-right: 8px solid #34495e; padding-right: 15px; }
