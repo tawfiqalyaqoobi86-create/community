@@ -59,12 +59,8 @@ if not is_admin:
         #MainMenu {visibility: hidden;}
         footer {visibility: hidden;}
         header {visibility: hidden;}
-        /* إخفاء زر إغلاق القائمة الجانبية للزوار */
+        /* إخفاء زر إغلاق القائمة الجانبية فقط مع الحفاظ على ظهور القائمة */
         [data-testid="stSidebarCollapseButton"] {
-            display: none !important;
-        }
-        /* منع سحب القائمة في الهواتف */
-        [data-testid="collapsedControl"] {
             display: none !important;
         }
         </style>
