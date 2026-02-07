@@ -12,27 +12,77 @@ if 'sidebar_state' not in st.session_state:
 
 st.set_page_config(page_title="مساعد مشرف تنمية العلاقات المجتمعية", layout="wide")
 
-# تحكم CSS ديناميكي للقائمة الجانبية
-if st.session_state.sidebar_state == "collapsed":
-    sidebar_style = """
-        <style>
-            [data-testid="stSidebar"] {display: none !important;}
-            [data-testid="stSidebarCollapsedControl"] {display: none !important;}
-            .stMain {width: 100% !important; margin-right: 0 !important; margin-left: 0 !important;}
-            header {display: none !important;}
-        </style>
-    """
-else:
-    sidebar_style = """
-        <style>
-            [data-testid="stSidebar"] {display: block !important;}
-            [data-testid="stSidebarCollapsedControl"] {display: none !important;}
-            header {display: none !important;}
-        </style>
-    """
-st.markdown(sidebar_style, unsafe_allow_html=True)
+# --- توحيد التنسيقات والتحكم في الواجهة ---
+if 'sidebar_state' not in st.session_state:
+    st.session_state.sidebar_state = "expanded"
 
-# زر مخصص لتبديل القائمة الجانبية في أعلى الصفحة
+# بناء كود CSS ديناميكي
+sidebar_display = "block" if st.session_state.sidebar_state == "expanded" else "none"
+main_margin = "300px" if st.session_state.sidebar_state == "expanded" else "0px"
+
+st.markdown(f"""
+    <style>
+    @import url('https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700;800&family=Almarai:wght@400;700&display=swap');
+    
+    html, body, [data-testid="stAppViewContainer"] {{
+        font-family: 'Cairo', 'Almarai', sans-serif;
+        direction: RTL;
+        text-align: right;
+    }}
+
+    /* التحكم في القائمة الجانبية */
+    [data-testid="stSidebar"] {{
+        display: {sidebar_display} !important;
+        background-color: #2c3e50 !important;
+        min-width: 300px !important;
+    }}
+    
+    /* إخفاء زر التبديل الأصلي لعدم التعارض */
+    [data-testid="stSidebarCollapsedControl"] {{
+        display: none !important;
+    }}
+
+    /* إخفاء الشريط العلوي والأيقونات المزعجة */
+    header {{ visibility: hidden !important; height: 0px !important; }}
+    footer {{ visibility: hidden !important; }}
+    #MainMenu {{ visibility: hidden !important; }}
+    .stDeployButton {{ display: none !important; }}
+
+    /* تحسين شكل المحتوى الرئيسي */
+    .stApp {{
+        background-color: #f4f7f9;
+    }}
+    
+    [data-testid="stMain"] {{
+        margin-right: {main_margin} !important;
+        direction: RTL !important;
+    }}
+
+    /* تصميم البطاقات والأزرار */
+    div[data-testid="metric-container"] {{
+        background-color: white;
+        padding: 20px;
+        border-radius: 15px;
+        box-shadow: 0 4px 6px rgba(0,0,0,0.05);
+        border-right: 5px solid #34495e;
+    }}
+    
+    .stButton>button {{
+        border-radius: 8px;
+        background: #34495e;
+        color: white;
+        border: none;
+        padding: 10px;
+    }}
+
+    @media (max-width: 768px) {{
+        [data-testid="stMain"] {{ margin-right: 0px !important; }}
+        [data-testid="stSidebar"] {{ position: fixed; z-index: 1000; width: 80% !important; }}
+    }}
+    </style>
+    """, unsafe_allow_html=True)
+
+# زر مخصص لتبديل القائمة الجانبية
 col_side, _ = st.columns([1, 10])
 btn_label = "📂 إظهار القائمة" if st.session_state.sidebar_state == "collapsed" else "📁 إخفاء القائمة"
 if col_side.button(btn_label):
@@ -87,91 +137,6 @@ try:
     conn_gs = st.connection("gsheets", type=GSheetsConnection)
 except Exception as e:
     conn_gs = None
-
-# تنسيق CSS مخصص - ألوان هادئة ورسمية
-st.markdown("""
-    <style>
-    @import url('https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700;800&family=Almarai:wght@400;700&display=swap');
-    
-    /* تنسيق المحتوى ليدعم العربية دون كسر الهيكل */
-    [data-testid="stMain"], [data-testid="stSidebarContent"], [data-testid="stHeader"] {
-        direction: RTL;
-        text-align: right;
-    }
-
-    /* إخفاء الشريط العلوي بالكامل */
-    header {visibility: hidden; height: 0px;}
-    #MainMenu {visibility: hidden;}
-    footer {visibility: hidden;}
-    .stDeployButton {display:none;}
-
-    .stApp {
-        background-color: #f4f7f9;
-    }
-
-    /* تحسين استجابة الهواتف */
-    @media (max-width: 768px) {
-        .stMain {
-            padding: 10px !important;
-        }
-        div[data-testid="metric-container"] {
-            padding: 10px !important;
-            margin-bottom: 10px;
-        }
-        h1 { font-size: 1.5rem !important; }
-    }
-
-    /* القائمة الجانبية الرسمية */
-    section[data-testid="stSidebar"] {
-        background-color: #2c3e50 !important;
-        min-width: 300px !important;
-    }
-    
-    section[data-testid="stSidebar"] * {
-        color: #ecf0f1 !important;
-    }
-
-    /* تصميم البطاقات */
-    div[data-testid="metric-container"] {
-        background-color: white;
-        padding: 20px;
-        border-radius: 15px;
-        box-shadow: 0 4px 6px rgba(0,0,0,0.05);
-        border-right: 5px solid #34495e;
-    }
-    
-    div[data-testid="stMetricValue"] {
-        color: #2c3e50 !important;
-    }
-
-    /* الأزرار الهادئة */
-    .stButton>button {
-        width: 100%;
-        border-radius: 8px;
-        background: #34495e;
-        color: white;
-        border: none;
-        padding: 10px;
-        transition: 0.3s;
-    }
-    
-    .stButton>button:hover {
-        background: #2c3e50;
-        box-shadow: 0 4px 8px rgba(0,0,0,0.2);
-    }
-
-    /* شريط البحث */
-    .search-box {
-        background: rgba(255,255,255,0.1);
-        padding: 10px;
-        border-radius: 10px;
-        margin-bottom: 20px;
-    }
-
-    h1 { color: #2c3e50; border-right: 8px solid #34495e; padding-right: 15px; }
-    h2, h3 { color: #34495e; }
-    </style>
-    """, unsafe_allow_html=True)
 
 # --- وظائف مساعدة ---
 def load_data(table):
