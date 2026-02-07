@@ -174,9 +174,9 @@ def sync_data_from_gs(force=False):
     if not conn_gs:
         return 0
     
-    # التأكد من تهيئة قاعدة البيانات قبل المزامنة
     init_db()
     
+    # الأسماء المتوقعة في الكود
     tables_map = {
         "action_plan": ("ActionPlan", {
             "الهدف": "objective", "النشاط": "activity", "المسؤول": "responsibility", 
@@ -197,35 +197,37 @@ def sync_data_from_gs(force=False):
     
     conn = get_connection()
     success_count = 0
+    
+    # محاولة جلب كافة البيانات كفحص أولي
+    try:
+        # قراءة أول صفحة فقط للتأكد من أن الرابط يعمل
+        test_df = conn_gs.read(ttl=0)
+        st.sidebar.write("✅ تم الاتصال بالملف بنجاح")
+    except Exception as e:
+        st.sidebar.error(f"❌ فشل الوصول للملف: تأكد من الرابط وصلاحية المحرر")
+        return 0
+
     for table, (ws, mapping) in tables_map.items():
         try:
-            # التحقق من وجود الجدول وعدد الصفوف
-            try:
-                local_count = pd.read_sql(f"SELECT COUNT(*) as count FROM {table}", conn).iloc[0]['count']
-            except:
-                local_count = 0
+            # محاولة القراءة
+            gs_df = conn_gs.read(worksheet=ws, ttl=0)
+            
+            if gs_df is not None and not gs_df.empty:
+                gs_df = gs_df.dropna(how='all')
+                gs_df.columns = gs_df.columns.str.strip()
+                to_insert = gs_df.rename(columns=mapping)
+                cols = list(mapping.values())
+                to_insert = to_insert[[c for c in cols if c in to_insert.columns]]
                 
-            if local_count == 0 or force:
-                # محاولة القراءة مع التعامل مع الأخطاء المحتملة في جوجل شيت
-                try:
-                    gs_df = conn_gs.read(worksheet=ws, ttl=0)
-                except Exception as gs_err:
-                    st.sidebar.warning(f"⚠️ {table}: لم نتمكن من الوصول لورقة {ws}")
-                    continue
-
-                if gs_df is not None and not gs_df.empty:
-                    gs_df = gs_df.dropna(how='all')
-                    gs_df.columns = gs_df.columns.str.strip()
-                    to_insert = gs_df.rename(columns=mapping)
-                    cols = list(mapping.values())
-                    to_insert = to_insert[[c for c in cols if c in to_insert.columns]]
-                    
-                    if not to_insert.empty:
-                        conn.execute(f"DELETE FROM {table}")
-                        to_insert.to_sql(table, conn, if_exists='append', index=False)
-                        success_count += 1
-        except Exception as e:
-            st.sidebar.error(f"⚠️ خطأ في {table}: {str(e)[:50]}")
+                if not to_insert.empty:
+                    conn.execute(f"DELETE FROM {table}")
+                    to_insert.to_sql(table, conn, if_exists='append', index=False)
+                    success_count += 1
+                    st.sidebar.caption(f"💎 تمت مزامنة {ws}")
+        except Exception as gs_err:
+            st.sidebar.warning(f"⚠️ لم نجد صفحة باسم '{ws}'")
+            st.sidebar.info(f"يرجى التأكد من وجود تبويب بالاسم: {ws}")
+            
     conn.close()
     return success_count
 
