@@ -176,7 +176,6 @@ def sync_data_from_gs(force=False):
     
     init_db()
     
-    # الأسماء المتوقعة في الكود
     tables_map = {
         "action_plan": ("ActionPlan", {
             "الهدف": "objective", "النشاط": "activity", "المسؤول": "responsibility", 
@@ -198,35 +197,35 @@ def sync_data_from_gs(force=False):
     conn = get_connection()
     success_count = 0
     
-    # محاولة جلب كافة البيانات كفحص أولي
     try:
-        # قراءة أول صفحة فقط للتأكد من أن الرابط يعمل
-        test_df = conn_gs.read(ttl=0)
-        st.sidebar.write("✅ تم الاتصال بالملف بنجاح")
-    except Exception as e:
-        st.sidebar.error(f"❌ فشل الوصول للملف: تأكد من الرابط وصلاحية المحرر")
-        return 0
+        # محاولة جلب البيانات لمعرفة أسماء الصفحات المتاحة
+        # ملاحظة: بعض الإصدارات لا تدعم جلب الأسماء مباشرة، لذا سنعتمد على الخطأ لإرشادنا
+        st.sidebar.write("🔍 جاري فحص التبويبات...")
+    except: pass
 
     for table, (ws, mapping) in tables_map.items():
         try:
-            # محاولة القراءة
+            # محاولة القراءة (بدون تحديد ttl لضمان أحدث البيانات)
             gs_df = conn_gs.read(worksheet=ws, ttl=0)
             
-            if gs_df is not None and not gs_df.empty:
+            if gs_df is not None:
+                # تنظيف البيانات
                 gs_df = gs_df.dropna(how='all')
-                gs_df.columns = gs_df.columns.str.strip()
-                to_insert = gs_df.rename(columns=mapping)
-                cols = list(mapping.values())
-                to_insert = to_insert[[c for c in cols if c in to_insert.columns]]
-                
-                if not to_insert.empty:
-                    conn.execute(f"DELETE FROM {table}")
-                    to_insert.to_sql(table, conn, if_exists='append', index=False)
-                    success_count += 1
-                    st.sidebar.caption(f"💎 تمت مزامنة {ws}")
+                if not gs_df.empty:
+                    gs_df.columns = gs_df.columns.str.strip()
+                    to_insert = gs_df.rename(columns=mapping)
+                    cols = list(mapping.values())
+                    to_insert = to_insert[[c for c in cols if c in to_insert.columns]]
+                    
+                    if not to_insert.empty:
+                        conn.execute(f"DELETE FROM {table}")
+                        to_insert.to_sql(table, conn, if_exists='append', index=False)
+                        success_count += 1
+                        st.sidebar.success(f"💎 تمت مزامنة {ws}")
         except Exception as gs_err:
-            st.sidebar.warning(f"⚠️ لم نجد صفحة باسم '{ws}'")
-            st.sidebar.info(f"يرجى التأكد من وجود تبويب بالاسم: {ws}")
+            st.sidebar.warning(f"⚠️ التبويب '{ws}' غير موجود أو فارغ")
+            # إظهار رسالة مساعدة للمستخدم
+            st.sidebar.info(f"تأكد أن اسم الصفحة في الأسفل هو {ws} تماماً بدون مسافات.")
             
     conn.close()
     return success_count
@@ -234,6 +233,7 @@ def sync_data_from_gs(force=False):
 def push_to_gs(table):
     """رفع كافة البيانات المحلية لجدول معين إلى جوجل شيت لضمان الثبات"""
     if not conn_gs:
+        st.sidebar.error("❌ لا يوجد اتصال بجوجل شيت")
         return
     
     tables_map = {
@@ -259,18 +259,21 @@ def push_to_gs(table):
         conn = get_connection()
         try:
             df = pd.read_sql(f"SELECT * FROM {table}", conn)
+            # تجهيز البيانات للرفع (ترجمة الأعمدة)
             if not df.empty:
-                # تجهيز البيانات للرفع (حذف ID وترجمة الأعمدة)
                 to_upload = df.drop(columns=['id'], errors='ignore').rename(columns=mapping)
-                # الاحتفاظ فقط بالأعمدة المترجمة
-                to_upload = to_upload[list(mapping.values())]
-                conn_gs.update(worksheet=ws_name, data=to_upload)
+                # التأكد من وجود كافة الأعمدة المطلوبة في الم mapping
+                cols_to_keep = [c for c in mapping.values() if c in to_upload.columns]
+                to_upload = to_upload[cols_to_keep]
             else:
-                # إذا كان الجدول فارغاً محلياً (بعد الحذف)، نقوم بتصفير ورقة العمل
-                empty_df = pd.DataFrame(columns=list(mapping.values()))
-                conn_gs.update(worksheet=ws_name, data=empty_df)
+                to_upload = pd.DataFrame(columns=list(mapping.values()))
+            
+            # محاولة التحديث
+            conn_gs.update(worksheet=ws_name, data=to_upload)
+            st.sidebar.success(f"☁️ تم تحديث {ws_name} في السحاب")
         except Exception as e:
-            st.error(f"⚠️ فشل المزامنة السحابية لـ {ws_name}: {e}")
+            st.sidebar.error(f"❌ فشل الحفظ في {ws_name}: {str(e)}")
+            st.sidebar.info("تأكد من وجود صفحة بهذا الاسم بالضبط في ملف جوجل شيت.")
         finally:
             conn.close()
 
