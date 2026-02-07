@@ -278,14 +278,7 @@ if menu == "📊 لوحة التحكم":
                     t_icon = "💰" if r.get('task_type') == 'مادي' else "💡"
                     date_info = f"📅 {r['timeframe']}" if r['timeframe'] else ""
                     
-                    # إنشاء رابط واتساب الرسمي للتذكير
-                    msg = f"تذكير بمهمة: {r['activity']}\nالتاريخ: {r['timeframe']}\nالنوع: {r.get('task_type', 'معنوي')}"
-                    # استخدام الرابط الرسمي الكامل لتجنب مشاكل الحجب
-                    whatsapp_url = f"https://api.whatsapp.com/send?text={msg.replace(' ', '%20').replace('\n', '%0A')}"
-                    
-                    col_msg, col_wa = st.columns([4, 1])
-                    col_msg.error(f"{t_icon} **{r['activity']}** \n {date_info}")
-                    col_wa.markdown(f"[📲 تذكير]({whatsapp_url})")
+                    st.error(f"{t_icon} **{r['activity']}** \n {date_info}")
             else: st.success("لا توجد مهام متأخرة")
         else:
             st.success("لا توجد مهام مسجلة")
