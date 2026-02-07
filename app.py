@@ -443,6 +443,26 @@ elif menu == "👨‍👩‍👧‍👦 الشركاء وأولياء الأمو
                 st.rerun()
         else:
             st.dataframe(display_p.drop(columns=['id', 'رقم الهاتف'], errors='ignore'), use_container_width=True)
+        
+        # --- إعادة عرض البطاقات التعريفية للشركاء ---
+        st.divider()
+        st.subheader("📋 بطاقات التواصل السريع")
+        for _, row in df_p.iterrows():
+            with st.container():
+                col_c1, col_c2 = st.columns([1, 2])
+                with col_c1:
+                    st.markdown(f"### 👤 {row['name']}")
+                    st.caption(f"🛡️ {row['participation_type']} | {row['expertise']}")
+                
+                with col_c2:
+                    if is_admin and row.get('phone'):
+                        clean_p = ''.join(filter(str.isdigit, str(row['phone'])))
+                        msg = f"السلام عليكم الأستاذ {row['name']}، نثمن دوركم في {row['participation_type']}."
+                        wa_url = f"https://api.whatsapp.com/send?phone={clean_p}&text={msg.replace(' ', '%20')}"
+                        st.markdown(f"### [💬 مراسلة فورية]({wa_url})")
+                    else:
+                        st.write("➖ لا توجد بيانات اتصال")
+                st.markdown("---")
 
 elif menu == "🎭 الفعاليات والأنشطة":
     st.title("🎭 إدارة الفعاليات والأنشطة")
@@ -497,42 +517,81 @@ elif menu == "🎭 الفعاليات والأنشطة":
         else:
             st.dataframe(display_e.drop(columns=['id'], errors='ignore'), use_container_width=True)
 
-elif menu == "📈 التقارير والإحصائيات":
-    st.title("📈 التقارير والتحليلات")
-    df_p = load_data("parents")
-    df_pl = load_data("action_plan")
-    
-    if df_pl.empty:
-        st.warning("لا توجد بيانات كافية لتوليد التقارير")
-    else:
-        st.subheader("📊 حالة تنفيذ الخطة السنوية")
-        st.plotly_chart(px.bar(df_pl, x='status', color='priority', barmode='group', title="توزيع المهام حسب الحالة والأولوية"), use_container_width=True)
-        
-        st.subheader("👤 تحليل قاعدة الشركاء")
-        col1, col2 = st.columns(2)
-        with col1:
-            st.plotly_chart(px.pie(df_p, names='participation_type', title="توزيع الشركاء حسب نوع الدعم"), use_container_width=True)
-        with col2:
-            st.plotly_chart(px.pie(df_p, names='interaction_level', title="مستويات التفاعل"), use_container_width=True)
-
 elif menu == "🤖 الذكاء الاصطناعي":
     st.title("🤖 مساعدك الذكي لتطوير العلاقات")
-    st.info("هذا القسم مصمم لمساعدتك في صياغة الخطابات والمبادرات.")
     
-    task = st.selectbox("ماذا تريد أن نفعل اليوم؟", ["صياغة خطاب شكر لشريك", "اقتراح مبادرة مجتمعية جديدة", "تحليل معوقات الخطة"])
+    df_p = load_data("parents")
     
-    if st.button("توليد المحتوى الذكي"):
-        with st.spinner("جاري التفكير..."):
-            time.sleep(2)
-            if "خطاب" in task:
-                st.write("### 📄 مسودة الخطاب المقترحة:")
-                st.info("سعادة الفاضل/ شريك النجاح...\n\nنتقدم لكم بخالص التقدير على مساهمتكم الفعالة في دعم برامجنا... ونثمن عالياً دوركم في تنمية المجتمع.")
-            elif "مبادرة" in task:
-                st.write("### 💡 مقترح مبادرة:")
-                st.success("**مبادرة جسور المعرفة:** ربط خبرات أولياء الأمور المهنية باحتياجات الطلاب التدريبية عبر ورش عمل شهرية.")
-            else:
-                st.write("### 🔍 التحليل التحليلي:")
-                st.warning("يُنصح بزيادة وتيرة التواصل مع الشركاء ذوي التفاعل 'المحدود' لتحويلهم لشركاء استراتيجيين.")
+    tab_gen, tab_wa = st.tabs(["💡 اقتراح مبادرات", "💬 صياغة رسائل واتساب"])
+    
+    with tab_gen:
+        task = st.selectbox("اختر نوع التحليل الذكي:", ["اقتراح مبادرة مجتمعية جديدة", "تحليل معوقات الخطة السنوية"])
+        if st.button("توليد الفكرة الذكية"):
+            with st.spinner("جاري التفكير..."):
+                time.sleep(1.5)
+                if "مبادرة" in task:
+                    st.success("**مبادرة جسور المعرفة:** ربط خبرات أولياء الأمور المهنية باحتياجات الطلاب عبر ورش عمل شهرية.")
+                else:
+                    st.warning("يُنصح بزيادة وتيرة التواصل مع الشركاء ذوي التفاعل 'المحدود' لتحويلهم لشركاء استراتيجيين.")
+
+    with tab_wa:
+        if df_p.empty:
+            st.warning("يرجى إضافة شركاء أولاً")
+        else:
+            selected_parent = st.selectbox("اختر الشريك للمراسلة:", df_p['name'].tolist())
+            parent_info = df_p[df_p['name'] == selected_parent].iloc[0]
+            
+            msg_style = st.radio("أسلوب الرسالة:", ["رسمي جداً", "ودي وأخوي", "دعوة لفعالية"])
+            
+            if st.button("صياغة وإرسال عبر واتساب"):
+                with st.spinner("جاري الصياغة..."):
+                    time.sleep(1)
+                    if "رسمي" in msg_style:
+                        message = f"سعادة الأستاذ {selected_parent} المحترم، نتقدم لكم بخالص الشكر على تعاونكم المستمر معنا في {parent_info['participation_type']}."
+                    elif "ودي" in msg_style:
+                        message = f"الأخ العزيز {selected_parent}، تحية طيبة وبعد.. حابين نشكرك على وقفتك معانا وجهودك في {parent_info['participation_type']}."
+                    else:
+                        message = f"نتشرف بدعوتك الأستاذ {selected_parent} لحضور فعاليتنا القادمة، تقديراً لدورك كشريك نجاح في {parent_info['participation_type']}."
+                    
+                    st.info(f"**الرسالة المقترحة:**\n\n{message}")
+                    
+                    if parent_info.get('phone'):
+                        clean_p = ''.join(filter(str.isdigit, str(parent_info['phone'])))
+                        wa_url = f"https://api.whatsapp.com/send?phone={clean_p}&text={message.replace(' ', '%20')}"
+                        st.markdown(f"### [🚀 إرسال الآن عبر واتساب]({wa_url})")
+                    else:
+                        st.error("لا يوجد رقم هاتف مسجل لهذا الشريك")
+
+elif menu == "📈 التقارير والإحصائيات":
+    st.title("📈 التقارير والتحليلات الشاملة")
+    df_p = load_data("parents")
+    df_pl = load_data("action_plan")
+    df_e = load_data("events")
+    
+    if df_pl.empty and df_p.empty:
+        st.warning("لا توجد بيانات كافية لتوليد التقارير")
+    else:
+        # إحصائيات سريعة
+        c1, c2, c3 = st.columns(3)
+        c1.metric("إجمالي الشركاء", len(df_p))
+        c2.metric("إجمالي الفعاليات", len(df_e))
+        c3.metric("نسبة الإنجاز", f"{(len(df_pl[df_pl['status'] == 'مكتمل'])/len(df_pl)*100 if not df_pl.empty else 0):.1f}%")
+
+        col_a, col_b = st.columns(2)
+        with col_a:
+            st.subheader("📊 توزيع الشركاء حسب التفاعل")
+            if not df_p.empty:
+                st.plotly_chart(px.bar(df_p, x='interaction_level', color='participation_type', title="التفاعل حسب مجال الشراكة"), use_container_width=True)
+        
+        with col_b:
+            st.subheader("📅 الجدول الزمني للفعاليات")
+            if not df_e.empty:
+                st.plotly_chart(px.scatter(df_e, x='date', y='name', size='attendees_count', color='attendees_count', title="الفعاليات وحجم الحضور"), use_container_width=True)
+
+        st.subheader("📋 حالة مهام الخطة السنوية")
+        if not df_pl.empty:
+            st.plotly_chart(px.pie(df_pl, names='status', hole=0.5, color='status', 
+                                   color_discrete_map={'مكتمل':'#27ae60', 'قيد التنفيذ':'#f1c40f', 'متأخر':'#e74c3c'}), use_container_width=True)
 
 # إضافة تذييل الصفحة
 st.sidebar.markdown("---")
