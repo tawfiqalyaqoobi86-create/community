@@ -4,7 +4,6 @@ import plotly.express as px
 from database import get_connection, init_db
 from datetime import datetime, timedelta
 import time
-from streamlit_gsheets import GSheetsConnection
 
 # إعدادات الصفحة
 st.set_page_config(page_title="مساعد مشرف تنمية العلاقات المجتمعية", layout="wide", initial_sidebar_state="auto")
@@ -51,12 +50,6 @@ if not st.session_state.logged_in:
     st.stop()
 
 is_admin = st.session_state.user_role == "admin"
-
-# محاولة الربط بجوجل شيت
-try:
-    conn_gs = st.connection("gsheets", type=GSheetsConnection)
-except Exception as e:
-    conn_gs = None
 
 # تنسيق CSS مخصص - ألوان هادئة ورسمية
 st.markdown("""
@@ -124,7 +117,7 @@ st.markdown("""
         box-shadow: 0 4px 8px rgba(0,0,0,0.2);
     }
 
-    /* شريط البحث - تحديث اللون للأزرق الغامق */
+    /* شريط البحث */
     section[data-testid="stSidebar"] .stTextInput input {
         color: #00008B !important;
         background-color: #ffffff !important;
@@ -133,17 +126,6 @@ st.markdown("""
         border-radius: 10px !important;
     }
     
-    /* لون النص عند الكتابة */
-    section[data-testid="stSidebar"] .stTextInput input:focus {
-        color: #00008B !important;
-    }
-
-    /* لون الـ Placeholder (النص التوضيحي) */
-    section[data-testid="stSidebar"] .stTextInput input::placeholder {
-        color: #5d6d7e !important;
-        opacity: 0.8;
-    }
-
     h1 { color: #2c3e50; border-right: 8px solid #34495e; padding-right: 15px; }
     h2, h3 { color: #34495e; }
     </style>
@@ -160,105 +142,7 @@ def load_data(table):
     conn.close()
     return df
 
-def sync_data_from_gs(force=False):
-    """إعادة برمجة شاملة لجلب البيانات من جوجل شيت"""
-    if not conn_gs:
-        st.sidebar.error("❌ لا يوجد اتصال بجوجل شيت")
-        return 0
-    
-    init_db()
-    
-    # تعريف الجداول والخرائط (Mapping)
-    config = {
-        "action_plan": {
-            "ws": "الخطة",
-            "map": {"الهدف": "objective", "النشاط": "activity", "المسؤول": "responsibility", "الزمن": "timeframe", "KPI": "kpi", "الأولوية": "priority", "النوع": "task_type", "الحالة": "status"}
-        },
-        "parents": {
-            "ws": "الشركاء",
-            "map": {"الاسم": "name", "النوع": "participation_type", "الخبرة": "expertise", "التفاعل": "interaction_level", "الهاتف": "phone"}
-        },
-        "events": {
-            "ws": "الفعاليات",
-            "map": {"الفعالية": "name", "التاريخ": "date", "المكان": "location", "الحضور": "attendees_count", "التقييم": "rating"}
-        }
-    }
-    
-    conn = get_connection()
-    success_count = 0
-    
-    for table, cfg in config.items():
-        try:
-            # استخدام الرابط بشكل صريح من الإعدادات لتفادي مشاكل الترميز
-            sheet_url = st.secrets["connections"]["gsheets"]["spreadsheet"]
-            df_gs = conn_gs.read(spreadsheet=sheet_url, worksheet=cfg["ws"], ttl=0)
-            
-            if df_gs is not None and not df_gs.empty:
-                df_gs = df_gs.dropna(how='all')
-                df_gs.columns = df_gs.columns.str.strip()
-                final_df = df_gs.rename(columns=cfg["map"])
-                needed_cols = list(cfg["map"].values())
-                final_df = final_df[[c for c in needed_cols if c in final_df.columns]]
-                
-                if not final_df.empty:
-                    conn.execute(f"DELETE FROM {table}")
-                    final_df.to_sql(table, conn, if_exists='append', index=False)
-                    success_count += 1
-                    st.sidebar.success(f"✅ تم استيراد '{cfg['ws']}'")
-        except Exception as e:
-            # استخدام repr لتفادي أخطاء الترميز عند عرض الخطأ نفسه
-            st.sidebar.warning(f"⚠️ تعذر جلب '{cfg['ws']}': {repr(e)[:100]}")
-            
-    conn.close()
-    return success_count
-
-def push_to_gs(table):
-    """إعادة برمجة شاملة لحفظ البيانات في جوجل شيت"""
-    if not conn_gs:
-        return
-    
-    config = {
-        "action_plan": {
-            "ws": "الخطة",
-            "map": {"objective": "الهدف", "activity": "النشاط", "responsibility": "المسؤول", "timeframe": "الزمن", "kpi": "KPI", "priority": "الأولوية", "task_type": "النوع", "status": "الحالة"}
-        },
-        "parents": {
-            "ws": "الشركاء",
-            "map": {"name": "الاسم", "participation_type": "النوع", "expertise": "الخبرة", "interaction_level": "التفاعل", "phone": "الهاتف"}
-        },
-        "events": {
-            "ws": "الفعاليات",
-            "map": {"name": "الفعالية", "date": "التاريخ", "location": "المكان", "attendees_count": "الحضور", "rating": "التقييم"}
-        }
-    }
-    
-    if table not in config:
-        return
-
-    conn = get_connection()
-    try:
-        # قراءة البيانات المحلية
-        df_local = pd.read_sql(f"SELECT * FROM {table}", conn)
-        
-        if not df_local.empty:
-            sheet_url = st.secrets["connections"]["gsheets"]["spreadsheet"]
-            df_to_push = df_local.drop(columns=['id'], errors='ignore').rename(columns=config[table]["map"])
-            cols_order = list(config[table]["map"].values())
-            df_to_push = df_to_push[[c for c in cols_order if c in df_to_push.columns]]
-            
-            # محاولة التحديث باستخدام الرابط الصريح
-            conn_gs.update(spreadsheet=sheet_url, worksheet=config[table]["ws"], data=df_to_push)
-            st.sidebar.success(f"☁️ تم تحديث سحابة '{config[table]['ws']}'")
-        else:
-            st.sidebar.info(f"ℹ️ جدول {config[table]['ws']} فارغ محلياً")
-            
-    except Exception as e:
-        st.sidebar.error(f"❌ فشل تحديث السحابة: {repr(e)[:100]}")
-    finally:
-        conn.close()
-
 # --- القائمة الجانبية ---
-# الساعة والتاريخ (ساعة حية)
 with st.sidebar:
     st.components.v1.html(f"""
         <style>
@@ -281,16 +165,13 @@ with st.sidebar:
         <script>
             function update() {{
                 const now = new Date();
-                // تعديل الوقت ليكون UTC+4 (توقيت عمان/الإمارات)
                 const utc = now.getTime() + (now.getTimezoneOffset() * 60000);
                 const gmt4 = new Date(utc + (3600000 * 4));
-                
                 const h = gmt4.getHours();
                 const m = gmt4.getMinutes().toString().padStart(2, '0');
                 const s = gmt4.getSeconds().toString().padStart(2, '0');
                 const ampm = h >= 12 ? 'PM' : 'AM';
                 const hours = (h % 12 || 12).toString().padStart(2, '0');
-                
                 document.getElementById('time').innerText = '🕒 ' + hours + ':' + m + ':' + s + ' ' + ampm;
                 document.getElementById('date').innerText = '📅 ' + gmt4.toISOString().split('T')[0];
             }}
@@ -299,35 +180,9 @@ with st.sidebar:
         </script>
     """, height=90)
     st.sidebar.markdown('<div style="border-bottom: 1px solid #3e4f5f; margin-bottom: 10px;"></div>', unsafe_allow_html=True)
-    
-    # حالة الاتصال بالسحاب وزر المزامنة
-    if conn_gs:
-        st.sidebar.success("✅ متصل بـ Google Sheets")
-        if st.sidebar.button("🔄 استعادة البيانات من السحاب"):
-            with st.spinner("جاري استعادة البيانات..."):
-                try:
-                    count = sync_data_from_gs(force=True)
-                    if count > 0:
-                        st.sidebar.success(f"تمت استعادة {count} جداول")
-                        time.sleep(1)
-                        st.rerun()
-                    else:
-                        st.sidebar.warning("لم يتم العثور على بيانات في ملف جوجل شيت")
-                except Exception as e:
-                    st.sidebar.error(f"❌ خطأ في الاتصال: {e}")
-                    st.sidebar.info("تأكد من وجود أوراق عمل بالأسماء التالية في ملف جوجل شيت: (الخطة، الشركاء، الفعاليات)")
-    else:
-        st.sidebar.error("❌ غير متصل بسحاب جوجل")
-        st.sidebar.markdown("""
-        **طريقة الإصلاح:**
-        1. اذهب لإعدادات التطبيق في Streamlit Cloud.
-        2. في قسم **Secrets**، انسخ محتوى ملف `secrets.toml`.
-        """)
 
 # البحث الذكي
-st.sidebar.markdown('<div class="search-box">', unsafe_allow_html=True)
 search_query = st.sidebar.text_input("🔍 بحث شامل...", placeholder="ابحث عن شريك، مبادرة...")
-st.sidebar.markdown('</div>', unsafe_allow_html=True)
 
 menu = st.sidebar.radio(
     "المسار الإجرائي:",
@@ -390,7 +245,6 @@ if menu == "📊 لوحة التحكم":
                 for _, r in urgent.iterrows(): 
                     t_icon = "💰" if r.get('task_type') == 'مادي' else "💡"
                     date_info = f"📅 {r['timeframe']}" if r['timeframe'] else ""
-                    
                     st.error(f"{t_icon} **{r['activity']}** \n {date_info}")
             else: st.success("لا توجد مهام متأخرة")
         else:
@@ -421,14 +275,9 @@ elif menu == "📅 خطة العمل":
                                      (obj, act, resp, str(timeframe), kpi, prio, t_type))
                         conn.commit()
                         conn.close()
-                        
-                        # مزامنة سحابية فورية
-                        push_to_gs("action_plan")
-                        
                         st.success("تم الحفظ بنجاح")
                         st.rerun()
                     except Exception as e:
-                        # إضافة العمود في حال عدم وجوده (للبيئة السحابية)
                         if "no column named task_type" in str(e):
                             conn.execute("ALTER TABLE action_plan ADD COLUMN task_type TEXT DEFAULT 'معنوي'")
                             conn.commit()
@@ -436,10 +285,6 @@ elif menu == "📅 خطة العمل":
                                          (obj, act, resp, str(timeframe), kpi, prio, t_type))
                             conn.commit()
                             conn.close()
-                            
-                            # مزامنة سحابية بعد التعديل
-                            push_to_gs("action_plan")
-                            
                             st.success("تم التحديث والحفظ")
                             st.rerun()
                         else:
@@ -447,23 +292,15 @@ elif menu == "📅 خطة العمل":
     
     if not df_pl.empty:
         st.subheader("📋 بنود الخطة (يمكنك التعديل مباشرة من الجدول)")
-        
-        # تحويل العمود لتاريخ بشكل آمن قبل العرض لمنع الخطأ
         try:
             df_pl['timeframe'] = pd.to_datetime(df_pl['timeframe'], errors='coerce')
         except:
             pass
             
-        # ترجمة الأعمدة للعرض
         display_pl = df_pl.rename(columns={
-            'objective': 'الهدف',
-            'activity': 'النشاط',
-            'responsibility': 'المسؤول',
-            'timeframe': 'الجدول الزمني',
-            'kpi': 'مؤشر الأداء',
-            'priority': 'الأولوية',
-            'status': 'الحالة',
-            'task_type': 'نوع المهمة'
+            'objective': 'الهدف', 'activity': 'النشاط', 'responsibility': 'المسؤول',
+            'timeframe': 'الجدول الزمني', 'kpi': 'مؤشر الأداء', 'priority': 'الأولوية',
+            'status': 'الحالة', 'task_type': 'نوع المهمة'
         })
         
         if is_admin:
@@ -488,11 +325,7 @@ elif menu == "📅 خطة العمل":
                         if not pd.isna(rid):
                             conn.execute(f"DELETE FROM action_plan WHERE id={rid}")
                     conn.commit(); conn.close()
-                    
-                    # مزامنة سحابية بعد الحذف
-                    push_to_gs("action_plan")
-                        
-                    st.success("تم الحذف بنجاح")
+                    st.success("تم الحفظ بنجاح")
                     st.rerun()
             
             if c_save.button("💾 حفظ كافة التعديلات في الخطة"):
@@ -507,7 +340,6 @@ elif menu == "📅 خطة العمل":
                     if "no column named task_type" in str(e):
                         conn.execute("ALTER TABLE action_plan ADD COLUMN task_type TEXT DEFAULT 'معنوي'")
                         conn.commit()
-                        # إعادة المحاولة بعد إضافة العمود
                         for _, row in edited_df.iterrows():
                             if 'id' in row and not pd.isna(row['id']):
                                 conn.execute("""UPDATE action_plan SET objective=?, activity=?, responsibility=?, timeframe=?, kpi=?, priority=?, status=?, task_type=? WHERE id=?""",
@@ -517,10 +349,6 @@ elif menu == "📅 خطة العمل":
                         st.error(f"❌ خطأ في قاعدة البيانات: {e}")
                 finally:
                     conn.close()
-                
-                # مزامنة سحابية شاملة
-                push_to_gs("action_plan")
-                
                 st.success("✅ تم تحديث الخطة بنجاح")
                 st.rerun()
         else:
@@ -528,7 +356,6 @@ elif menu == "📅 خطة العمل":
 
 elif menu == "👨‍👩‍👧‍👦 الشركاء وأولياء الأمور":
     st.title("👨‍👩‍👧‍👦 إدارة الشركاء الاستراتيجيين")
-    df_e = load_data("events")
     
     if is_admin:
         with st.expander("➕ تسجيل شريك جديد"):
@@ -553,60 +380,26 @@ elif menu == "👨‍👩‍👧‍👦 الشركاء وأولياء الأمو
                             st.error(f"خطأ: {e}")
                     finally:
                         conn.close()
-                    
-                    # مزامنة سحابية
-                    push_to_gs("parents")
-                    
                     st.success("تم تسجيل الشريك بنجاح")
                     st.rerun()
 
     df_p = load_data("parents")
     if not df_p.empty:
-        st.subheader("🔍 استعراض الشركاء والربط الذكي (يمكنك التعديل مباشرة)")
-        
-        # ترجمة الأعمدة للعرض
+        st.subheader("🔍 استعراض الشركاء والربط الذكي")
         display_p = df_p.rename(columns={
-            'name': 'الاسم',
-            'participation_type': 'نوع المشاركة',
-            'expertise': 'الخبرة/المجال',
-            'interaction_level': 'مستوى التفاعل',
+            'name': 'الاسم', 'participation_type': 'نوع المشاركة',
+            'expertise': 'الخبرة/المجال', 'interaction_level': 'مستوى التفاعل',
             'phone': 'رقم الهاتف'
         })
         
-        # إضافة عمود لرابط واتساب الذكي
-        def make_ai_whatsapp_link(row):
-            phone = row.get('رقم الهاتف')
-            name = row.get('الاسم')
-            p_type = row.get('نوع المشاركة')
-            
-            if phone and name:
-                # صياغة رسمية ودية طويلة
-                message = f"""الأخ الفاضل الأستاذ {name} المحترم،،
-
-السلام عليكم ورحمة الله وبركاته..
-يسرنا في قسم تنمية العلاقات المجتمعية أن نتقدم لشخصكم الكريم بخالص الشكر وعظيم الامتنان على مساهماتكم القيمة وتفاعلكم المستمر في مجال ({p_type}). إننا نؤمن يقيناً بأن نجاح مبادراتنا يعتمد بشكل كبير على وجود شركاء متميزين مثلكم، ونثمن عالياً هذا العطاء الذي يعكس روح المسؤولية والتعاون المشترك. نتطلع دوماً لاستمرار هذا التعاون المثمر، ونسأل الله العلي القدير أن يبارك في جهودكم ويسدد خطاكم لما فيه خير الجميع.
-
-تفضلوا بقبول فائق التقدير والامتنان،،
-مشرف تنمية العلاقات المجتمعية"""
-                
-                # تنظيف الرقم وتجهيز الرابط
-                clean_phone = ''.join(filter(str.isdigit, str(phone)))
-                encoded_msg = message.replace(' ', '%20').replace('\n', '%0A')
-                return f"https://api.whatsapp.com/send?phone={clean_phone}&text={encoded_msg}"
-            return ""
-
         if is_admin:
-            display_p['واتساب الذكي'] = display_p.apply(make_ai_whatsapp_link, axis=1)
             display_p['حذف'] = False
             edited_p = st.data_editor(
                 display_p, 
                 key="p_edit", 
                 use_container_width=True, 
                 num_rows="dynamic",
-                column_config={
-                    "id": st.column_config.NumberColumn("ID", disabled=True),
-                    "واتساب الذكي": st.column_config.LinkColumn("🤖 مراسلة ذكية", display_text="إرسال شكر ذكي")
-                }
+                column_config={"id": st.column_config.NumberColumn("ID", disabled=True)}
             )
             
             c_p1, c_p2 = st.columns(2)
@@ -618,10 +411,6 @@ elif menu == "👨‍👩‍👧‍👦 الشركاء وأولياء الأمو
                         if not pd.isna(rid):
                             conn.execute(f"DELETE FROM parents WHERE id={rid}")
                     conn.commit(); conn.close()
-                    
-                    # مزامنة سحابية بعد الحذف
-                    push_to_gs("parents")
-                        
                     st.success("تم الحذف بنجاح")
                     st.rerun()
             
@@ -632,41 +421,10 @@ elif menu == "👨‍👩‍👧‍👦 الشركاء وأولياء الأمو
                         conn.execute("""UPDATE parents SET name=?, participation_type=?, expertise=?, interaction_level=?, phone=? WHERE id=?""",
                                      (row['الاسم'], row['نوع المشاركة'], row['الخبرة/المجال'], row['مستوى التفاعل'], row.get('رقم الهاتف', ''), row['id']))
                 conn.commit(); conn.close()
-                
-                # مزامنة سحابية
-                push_to_gs("parents")
-                
                 st.success("✅ تم التحديث بنجاح")
                 st.rerun()
         else:
-            # الزوار لا يرون عمود الهاتف ولا عمود الواتساب الذكي
-            st.dataframe(display_p.drop(columns=['id', 'رقم الهاتف', 'واتساب الذكي'], errors='ignore'), use_container_width=True)
-        
-        st.divider()
-        for _, row in df_p.iterrows():
-            with st.container():
-                cl1, cl2 = st.columns([1, 2])
-                cl1.markdown(f"### 👤 {row['name']}")
-                cl1.caption(f"🛡️ {row['participation_type']} | {row['expertise']}")
-                
-                # إضافة زر واتساب ذكي للبطاقة (للمسؤول فقط)
-                if is_admin and row.get('phone'):
-                    name = row.get('name')
-                    p_type = row.get('participation_type')
-                    clean_p = ''.join(filter(str.isdigit, str(row['phone'])))
-                    message = f"السلام عليكم ورحمة الله وبركاته الأستاذ {name}، نتقدم لكم بخالص الشكر لمساهمتكم في ({p_type})."
-                    encoded_msg = message.replace(' ', '%20')
-                    wa_url = f"https://api.whatsapp.com/send?phone={clean_p}&text={encoded_msg}"
-                    cl1.markdown(f"[🤖 إرسال شكر ذكي]({wa_url})")
-                
-                if not df_e.empty and 'name' in df_e.columns:
-                    linked = df_e[df_e['name'].str.contains(row['name'], na=False)]
-                    if not linked.empty:
-                        cl2.write("**🚀 الفعاليات المرتبطة:**")
-                        for _, li in linked.iterrows(): cl2.info(f"🔹 {li['name']}")
-                    else:
-                        cl2.write("➖ لا توجد فعاليات مرتبطة حالياً")
-                st.divider()
+            st.dataframe(display_p.drop(columns=['id', 'رقم الهاتف'], errors='ignore'), use_container_width=True)
 
 elif menu == "🎭 الفعاليات والأنشطة":
     st.title("🎭 إدارة الفعاليات والأنشطة")
@@ -680,65 +438,33 @@ elif menu == "🎭 الفعاليات والأنشطة":
                 if st.form_submit_button("إضافة للجدول"):
                     try:
                         conn = get_connection()
-                        # التأكد من وجود الجدول قبل الإدخال
-                        conn.execute('''CREATE TABLE IF NOT EXISTS events (
-                            id INTEGER PRIMARY KEY AUTOINCREMENT,
-                            name TEXT NOT NULL,
-                            date TEXT,
-                            location TEXT,
-                            attendees_count INTEGER,
-                            rating INTEGER
-                        )''')
                         conn.execute("INSERT INTO events (name, date, location, attendees_count) VALUES (?,?,?,?)", 
                                      (en, str(ed), el, at))
-                        conn.commit()
-                        conn.close()
-                        
-                        # مزامنة سحابية
-                        push_to_gs("events")
-                        
-                        st.success("✅ تم الحفظ بنجاح")
-                        time.sleep(1)
+                        conn.commit(); conn.close()
+                        st.success("تمت الإضافة")
                         st.rerun()
                     except Exception as e:
-                        st.error(f"❌ فشل الحفظ: {e}")
-    
+                        st.error(f"خطأ: {e}")
+
     df_e = load_data("events")
     if not df_e.empty:
-        st.subheader("🗓️ جدول الفعاليات")
-        # ترجمة الأعمدة للعرض
-        display_df = df_e.rename(columns={
-            'name': 'الفعالية',
-            'date': 'التاريخ',
-            'location': 'المكان',
-            'attendees_count': 'الحضور المتوقع',
-            'rating': 'التقييم'
+        display_e = df_e.rename(columns={
+            'name': 'الفعالية', 'date': 'التاريخ', 'location': 'المكان', 
+            'attendees_count': 'الحضور', 'rating': 'التقييم'
         })
-        
         if is_admin:
-            display_df['حذف'] = False
-            edited_e = st.data_editor(
-                display_df, 
-                key="e_edit", 
-                use_container_width=True, 
-                num_rows="dynamic",
-                column_config={"id": st.column_config.NumberColumn("ID", disabled=True)}
-            )
+            display_e['حذف'] = False
+            edited_e = st.data_editor(display_e, key="e_edit", use_container_width=True, num_rows="dynamic")
             
             c_e1, c_e2 = st.columns(2)
-            if c_e1.button("🔴 حذف الفعاليات المحددة"):
+            if c_e1.button("🔴 حذف الفعالية"):
                 to_del = edited_e[edited_e['حذف'] == True]
                 if not to_del.empty:
                     conn = get_connection()
                     for _, row in to_del.iterrows():
-                        if 'id' in row and not pd.isna(row['id']):
-                            conn.execute(f"DELETE FROM events WHERE id={row['id']}")
+                        conn.execute(f"DELETE FROM events WHERE id={row['id']}")
                     conn.commit(); conn.close()
-                    
-                    # مزامنة سحابية بعد الحذف
-                    push_to_gs("events")
-                        
-                    st.success("تم الحذف بنجاح")
+                    st.success("تم الحذف")
                     st.rerun()
             
             if c_e2.button("💾 حفظ تعديلات الفعاليات"):
@@ -746,149 +472,50 @@ elif menu == "🎭 الفعاليات والأنشطة":
                 for _, row in edited_e.iterrows():
                     if 'id' in row and not pd.isna(row['id']):
                         conn.execute("""UPDATE events SET name=?, date=?, location=?, attendees_count=?, rating=? WHERE id=?""",
-                                     (row['الفعالية'], str(row['التاريخ']), row['المكان'], row['الحضور المتوقع'], row.get('التقييم', 0), row['id']))
+                                     (row['الفعالية'], str(row['التاريخ']), row['المكان'], row['الحضور'], row.get('التقييم', 0), row['id']))
                 conn.commit(); conn.close()
-                
-                # مزامنة سحابية
-                push_to_gs("events")
-                
-                st.success("✅ تم تحديث الفعاليات بنجاح")
+                st.success("✅ تم التحديث")
                 st.rerun()
         else:
-            st.dataframe(display_df.drop(columns=['id', 'حذف'], errors='ignore'), use_container_width=True)
+            st.dataframe(display_e.drop(columns=['id'], errors='ignore'), use_container_width=True)
 
 elif menu == "📈 التقارير والإحصائيات":
-    st.title("📈 مركز التقارير والتحليلات")
-    df_e = load_data("events")
+    st.title("📈 التقارير والتحليلات")
     df_p = load_data("parents")
+    df_pl = load_data("action_plan")
     
-    if not df_e.empty:
-        col_c1, col_c2 = st.columns(2)
-        with col_c1:
-            st.subheader("📊 حضور الفعاليات")
-            fig = px.bar(df_e, x='name', y='attendees_count', title="عدد الحضور حسب الفعالية")
-            st.plotly_chart(fig, use_container_width=True)
-        
-        with col_c2:
-            st.subheader("👥 توزيع الشركاء")
-            if 'participation_type' in df_p.columns:
-                fig_pie = px.pie(df_p, names='participation_type', title="أنواع الشراكات")
-                st.plotly_chart(fig_pie, use_container_width=True)
-        
-        st.divider()
-        if st.button("📤 تصدير ملخص التقارير إلى Google Sheets"):
-            if conn_gs:
-                try:
-                    # تجهيز النص الموحد للتقرير كما طلب المستخدم
-                    report_text = f"""تقرير دوري: مشرف تنمية العلاقات المجتمعية
-التاريخ: {datetime.now().strftime('%Y-%m-%d')}
-------------------------------------------
-1. ملخص الإنجاز: تم تنفيذ {len(df_e)} عملية/فعالية.
-2. حالة أولياء الأمور: يوجد {len(df_p)} ولي أمر مسجل.
-3. التوصيات: الاستمرار في تعزيز التواصل الرقمي.
-------------------------------------------"""
-                    
-                    # تجهيز البيانات للإرسال
-                    report_data = pd.DataFrame([{
-                        "التاريخ": datetime.now().strftime("%Y-%m-%d %H:%M"),
-                        "نص التقرير": report_text
-                    }])
-                    
-                    try:
-                        existing_reports = conn_gs.read(worksheet="Reports", ttl=0)
-                        existing_reports = existing_reports.dropna(how='all')
-                        updated_reports = pd.concat([existing_reports, report_data], ignore_index=True)
-                    except:
-                        updated_reports = report_data
-                    
-                    conn_gs.update(worksheet="Reports", data=updated_reports)
-                    st.success("✅ تم تصدير التقرير النصي بنجاح")
-                    st.text_area("معاينة التقرير المرسل:", report_text, height=200)
-                except Exception as e:
-                    st.error(f"❌ فشل التصدير: {e}")
-            else:
-                st.error("❌ الاتصال بـ Google Sheets غير مفعل.")
+    if df_pl.empty:
+        st.warning("لا توجد بيانات كافية لتوليد التقارير")
     else:
-        st.info("لا توجد بيانات كافية لتوليد التقارير")
+        st.subheader("📊 حالة تنفيذ الخطة السنوية")
+        st.plotly_chart(px.bar(df_pl, x='status', color='priority', barmode='group', title="توزيع المهام حسب الحالة والأولوية"), use_container_width=True)
+        
+        st.subheader("👤 تحليل قاعدة الشركاء")
+        col1, col2 = st.columns(2)
+        with col1:
+            st.plotly_chart(px.pie(df_p, names='participation_type', title="توزيع الشركاء حسب نوع الدعم"), use_container_width=True)
+        with col2:
+            st.plotly_chart(px.pie(df_p, names='interaction_level', title="مستويات التفاعل"), use_container_width=True)
 
 elif menu == "🤖 الذكاء الاصطناعي":
-    st.title("🤖 مركز الذكاء الاصطناعي الاستراتيجي")
+    st.title("🤖 مساعدك الذكي لتطوير العلاقات")
+    st.info("هذا القسم مصمم لمساعدتك في صياغة الخطابات والمبادرات.")
     
-    tab_gen, tab_swot, tab_reports = st.tabs(["✉️ توليد الخطابات", "🔍 التحليل الرباعي SWOT", "📊 تقارير الأداء"])
+    task = st.selectbox("ماذا تريد أن نفعل اليوم؟", ["صياغة خطاب شكر لشريك", "اقتراح مبادرة مجتمعية جديدة", "تحليل معوقات الخطة"])
     
-    df_p = load_data("parents")
-    df_e = load_data("events")
-    
-    with tab_gen:
-        st.subheader("✉️ مولد المراسلات الرسمية")
-        if not df_p.empty:
-            p_name = st.selectbox("اختر الشريك المستهدف", df_p['name'].tolist())
-            doc_type = st.selectbox("نوع الخطاب", ["دعوة شراكة", "خطاب شكر", "تقرير تعاون"])
-            
-            if st.button("توليد النص"):
-                generated_text = ""
-                if doc_type == "دعوة شراكة":
-                    generated_text = f"""الأخ الفاضل الأستاذ/ {p_name} المحترم،
-تحية طيبة وبعد،،
-بناءً على ما عهدناه فيكم من دور فعال ومكانة متميزة في مجتمعنا، يتشرف فريق تنمية العلاقات المجتمعية بدعوتكم للمساهمة في برامجنا ومبادراتنا القادمة. نحن نؤمن يقيناً بأن خبراتكم الواسعة ورؤيتكم الثاقبة ستشكل إضافة نوعية وكبيرة تساهم في تحقيق تطلعاتنا وأهدافنا المشتركة لخدمة المجتمع وتنميته. إن مساهمتكم تمثل حجر زاوية في نجاح هذه الجهود، ونتطلع بشوق للتعاون معكم.
-تفضلوا بقبول فائق الاحترام والتقدير."""
-                elif doc_type == "خطاب شكر":
-                    generated_text = f"""الأخ الفاضل الأستاذ/ {p_name} المحترم،
-السلام عليكم ورحمة الله وبركاته،،
-يتقدم فريق تنمية العلاقات المجتمعية بخالص الشكر والتقدير لشخصكم الكريم على جهودكم الملموسة ومساهماتكم القيمة التي كان لها الأثر الطيب والواضح في نجاح برامجنا ومبادراتنا. إننا نثمن عالياً هذا العطاء السخي الذي يعكس عمق انتمائكم، ونتطلع دائماً لاستمرار وتعزيز هذا التعاون المثمر بما يخدم مصلحة الجميع. جزاكم الله خيراً على ما قدمتموه.
-مع خالص تمنياتنا لكم بموفور الصحة والعافية والسداد."""
-                elif doc_type == "تقرير تعاون":
-                    generated_text = f"""الأخ الفاضل الأستاذ/ {p_name} المحترم،
-تحية طيبة وبعد،،
-نرفق لشخصكم الكريم ملخصاً تفصيلياً لنتائج التعاون المشترك المثمر خلال الفترة الماضية، حيث أظهرت المؤشرات والإحصائيات فاعلية كبيرة وتأثيراً إيجابياً ملموساً في كافة المجالات والأنشطة المستهدفة. نشكر لكم احترافيتكم العالية والتزامكم الدائم بتقديم الأفضل، ونحن على ثقة بأن القادم سيحمل المزيد من النجاحات بفضل هذا التعاون المتميز.
-دمتم في حفظ الله ورعايته."""
-                
-                st.session_state.current_generated_letter = generated_text
-            
-            if 'current_generated_letter' in st.session_state:
-                st.info(st.session_state.current_generated_letter)
-                
-                # حجب زر الإرسال عن الزوار
-                if is_admin:
-                    # جلب رقم الهاتف برمجياً
-                    partner_info = df_p[df_p['name'] == p_name].iloc[0]
-                    phone = partner_info.get('phone', '')
-                    
-                    if phone:
-                        clean_phone = ''.join(filter(str.isdigit, str(phone)))
-                        encoded_letter = st.session_state.current_generated_letter.replace(' ', '%20').replace('\n', '%0A')
-                        wa_link = f"https://api.whatsapp.com/send?phone={clean_phone}&text={encoded_letter}"
-                        
-                        st.markdown(f"""
-                            <a href="{wa_link}" target="_blank" style="text-decoration: none;">
-                                <div style="background-color: #25d366; color: white; padding: 10px 20px; border-radius: 8px; text-align: center; font-weight: bold; cursor: pointer;">
-                                    🤖 إرسال الخطاب المولد عبر واتساب
-                                </div>
-                            </a>
-                        """, unsafe_allow_html=True)
-                    else:
-                        st.warning("⚠️ لا يوجد رقم هاتف مسجل لهذا الشريك لإرسال الخطاب عبر واتساب.")
-                else:
-                    st.warning("ℹ️ ميزة إرسال الخطابات عبر واتساب متاحة للمسؤول فقط.")
-                
-                if st.button("تصدير كـ PDF"): st.warning("خاصية التصدير قيد التطوير")
-        else:
-            st.warning("يجب إضافة شركاء أولاً لتوليد الخطابات.")
+    if st.button("توليد المحتوى الذكي"):
+        with st.spinner("جاري التفكير..."):
+            time.sleep(2)
+            if "خطاب" in task:
+                st.write("### 📄 مسودة الخطاب المقترحة:")
+                st.info("سعادة الفاضل/ شريك النجاح...\n\nنتقدم لكم بخالص التقدير على مساهمتكم الفعالة في دعم برامجنا... ونثمن عالياً دوركم في تنمية المجتمع.")
+            elif "مبادرة" in task:
+                st.write("### 💡 مقترح مبادرة:")
+                st.success("**مبادرة جسور المعرفة:** ربط خبرات أولياء الأمور المهنية باحتياجات الطلاب التدريبية عبر ورش عمل شهرية.")
+            else:
+                st.write("### 🔍 التحليل التحليلي:")
+                st.warning("يُنصح بزيادة وتيرة التواصل مع الشركاء ذوي التفاعل 'المحدود' لتحويلهم لشركاء استراتيجيين.")
 
-    with tab_swot:
-        st.subheader("🔍 التحليل الرباعي الذكي")
-        st.write("بناءً على البيانات الحالية، يقترح النظام التحليل التالي:")
-        col1, col2 = st.columns(2)
-        col1.success(f"**نقاط القوة:** وجود {len(df_p)} شركاء فاعلين.")
-        col2.warning(f"**نقاط الضعف:** الحاجة لزيادة عدد الفعاليات المنجزة.")
-        col1.info("**الفرص:** توسيع قاعدة الشراكات في المجالات المهنية.")
-        col2.error("**التحديات:** تفاوت مستويات التفاعل بين الشركاء.")
-
-    with tab_reports:
-        st.subheader("📑 نظام التقارير التلقائي")
-        rep_type = st.radio("نوع التقرير", ["تقرير شهري", "تقرير فصلي", "تقرير سنوي"], horizontal=True)
-        if st.button("توليد التقرير الإحصائي"):
-            st.write(f"تقرير {rep_type} - تم توليده بتاريخ {datetime.now().strftime('%Y-%m-%d')}")
-            st.write(f"إجمالي الفعاليات: {len(df_e)}")
-            st.write(f"إجمالي الشركاء: {len(df_p)}")
-            st.download_button("تحميل بيانات الشركاء (Excel)", df_p.to_csv().encode('utf-8'), "partners.csv", "text/csv")
+# إضافة تذييل الصفحة
+st.sidebar.markdown("---")
+st.sidebar.caption("v2.0.0 | نظام محلي آمن")
