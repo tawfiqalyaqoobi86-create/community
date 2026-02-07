@@ -190,7 +190,8 @@ def sync_data_from_gs(force=False):
         }),
         "events": ("Events", {
             "الفعالية": "name", "التاريخ": "date", 
-            "المكان": "location", "الحضور": "attendees_count"
+            "المكان": "location", "الحضور": "attendees_count",
+            "التقييم": "rating"
         })
     }
     
@@ -227,6 +228,49 @@ def sync_data_from_gs(force=False):
             st.sidebar.error(f"⚠️ خطأ في {table}: {str(e)[:50]}")
     conn.close()
     return success_count
+
+def push_to_gs(table):
+    """رفع كافة البيانات المحلية لجدول معين إلى جوجل شيت لضمان الثبات"""
+    if not conn_gs:
+        return
+    
+    tables_map = {
+        "action_plan": ("ActionPlan", {
+            "objective": "الهدف", "activity": "النشاط", "responsibility": "المسؤول", 
+            "timeframe": "الزمن", "kpi": "KPI", "priority": "الأولوية", 
+            "task_type": "النوع", "status": "الحالة"
+        }),
+        "parents": ("Parents", {
+            "name": "الاسم", "participation_type": "النوع", 
+            "expertise": "الخبرة", "interaction_level": "التفاعل",
+            "phone": "الهاتف"
+        }),
+        "events": ("Events", {
+            "name": "الفعالية", "date": "التاريخ", 
+            "location": "المكان", "attendees_count": "الحضور",
+            "rating": "التقييم"
+        })
+    }
+    
+    if table in tables_map:
+        ws_name, mapping = tables_map[table]
+        conn = get_connection()
+        try:
+            df = pd.read_sql(f"SELECT * FROM {table}", conn)
+            if not df.empty:
+                # تجهيز البيانات للرفع (حذف ID وترجمة الأعمدة)
+                to_upload = df.drop(columns=['id'], errors='ignore').rename(columns=mapping)
+                # الاحتفاظ فقط بالأعمدة المترجمة
+                to_upload = to_upload[list(mapping.values())]
+                conn_gs.update(worksheet=ws_name, data=to_upload)
+            else:
+                # إذا كان الجدول فارغاً محلياً (بعد الحذف)، نقوم بتصفير ورقة العمل
+                empty_df = pd.DataFrame(columns=list(mapping.values()))
+                conn_gs.update(worksheet=ws_name, data=empty_df)
+        except Exception as e:
+            st.error(f"⚠️ فشل المزامنة السحابية لـ {ws_name}: {e}")
+        finally:
+            conn.close()
 
 # --- القائمة الجانبية ---
 # الساعة والتاريخ (ساعة حية)
@@ -393,17 +437,8 @@ elif menu == "📅 خطة العمل":
                         conn.commit()
                         conn.close()
                         
-                        # مزامنة سحابية
-                        if conn_gs:
-                            try:
-                                new_data = pd.DataFrame([{"الهدف": obj, "النشاط": act, "المسؤول": resp, "الزمن": str(timeframe), "KPI": kpi, "الأولوية": prio, "النوع": t_type, "الحالة": "قيد التنفيذ"}])
-                                try:
-                                    existing = conn_gs.read(worksheet="ActionPlan", ttl=0)
-                                    existing = existing.dropna(how='all')
-                                    updated = pd.concat([existing, new_data], ignore_index=True)
-                                except: updated = new_data
-                                conn_gs.update(worksheet="ActionPlan", data=updated)
-                            except: pass
+                        # مزامنة سحابية فورية
+                        push_to_gs("action_plan")
                         
                         st.success("تم الحفظ بنجاح")
                         st.rerun()
@@ -416,6 +451,10 @@ elif menu == "📅 خطة العمل":
                                          (obj, act, resp, str(timeframe), kpi, prio, t_type))
                             conn.commit()
                             conn.close()
+                            
+                            # مزامنة سحابية بعد التعديل
+                            push_to_gs("action_plan")
+                            
                             st.success("تم التحديث والحفظ")
                             st.rerun()
                         else:
@@ -466,11 +505,7 @@ elif menu == "📅 خطة العمل":
                     conn.commit(); conn.close()
                     
                     # مزامنة سحابية بعد الحذف
-                    if conn_gs:
-                        try:
-                            gs_data = edited_df[edited_df['حذف'] == False].drop(columns=['id', 'حذف'], errors='ignore')
-                            conn_gs.update(worksheet="ActionPlan", data=gs_data)
-                        except: pass
+                    push_to_gs("action_plan")
                         
                     st.success("تم الحذف بنجاح")
                     st.rerun()
@@ -481,7 +516,7 @@ elif menu == "📅 خطة العمل":
                     for _, row in edited_df.iterrows():
                         if 'id' in row and not pd.isna(row['id']):
                             conn.execute("""UPDATE action_plan SET objective=?, activity=?, responsibility=?, timeframe=?, kpi=?, priority=?, status=?, task_type=? WHERE id=?""",
-                                         (row['الهدف'], row['النشاط'], row['المسؤول'], row['الجدول الزمني'], row['مؤشر الأداء'], row['الأولوية'], row['الحالة'], row.get('نوع المهمة', 'معنوي'), row['id']))
+                                         (row['الهدف'], row['النشاط'], row['المسؤول'], str(row['الجدول الزمني']), row['مؤشر الأداء'], row['الأولوية'], row['الحالة'], row.get('نوع المهمة', 'معنوي'), row['id']))
                     conn.commit()
                 except Exception as e:
                     if "no column named task_type" in str(e):
@@ -491,20 +526,16 @@ elif menu == "📅 خطة العمل":
                         for _, row in edited_df.iterrows():
                             if 'id' in row and not pd.isna(row['id']):
                                 conn.execute("""UPDATE action_plan SET objective=?, activity=?, responsibility=?, timeframe=?, kpi=?, priority=?, status=?, task_type=? WHERE id=?""",
-                                             (row['الهدف'], row['النشاط'], row['المسؤول'], row['الجدول الزمني'], row['مؤشر الأداء'], row['الأولوية'], row['الحالة'], row.get('نوع المهمة', 'معنوي'), row['id']))
+                                             (row['الهدف'], row['النشاط'], row['المسؤول'], str(row['الجدول الزمني']), row['مؤشر الأداء'], row['الأولوية'], row['الحالة'], row.get('نوع المهمة', 'معنوي'), row['id']))
                         conn.commit()
                     else:
                         st.error(f"❌ خطأ في قاعدة البيانات: {e}")
                 finally:
                     conn.close()
                 
-                if conn_gs:
-                    try:
-                        # إرسال البيانات المترجمة لجوجل شيت (بدون أعمدة التحكم)
-                        gs_data = edited_df.drop(columns=['id', 'حذف'], errors='ignore')
-                        conn_gs.update(worksheet="ActionPlan", data=gs_data)
-                    except Exception as e:
-                        st.warning(f"⚠️ فشل التحديث في Google Sheets: {e}")
+                # مزامنة سحابية شاملة
+                push_to_gs("action_plan")
+                
                 st.success("✅ تم تحديث الخطة بنجاح")
                 st.rerun()
         else:
@@ -539,17 +570,7 @@ elif menu == "👨‍👩‍👧‍👦 الشركاء وأولياء الأمو
                         conn.close()
                     
                     # مزامنة سحابية
-                    if conn_gs:
-                        try:
-                            new_data = pd.DataFrame([{"الاسم": name, "النوع": type_p, "الخبرة": exp, "التفاعل": level, "الهاتف": phone, "التاريخ": str(datetime.now())}])
-                            try:
-                                existing = conn_gs.read(worksheet="Parents", ttl=0)
-                                existing = existing.dropna(how='all')
-                                updated = pd.concat([existing, new_data], ignore_index=True)
-                            except: updated = new_data
-                            conn_gs.update(worksheet="Parents", data=updated)
-                        except Exception as e:
-                            st.warning(f"⚠️ فشل تحديث Google Sheets (الشركاء): {e}")
+                    push_to_gs("parents")
                     
                     st.success("تم تسجيل الشريك بنجاح")
                     st.rerun()
@@ -614,11 +635,7 @@ elif menu == "👨‍👩‍👧‍👦 الشركاء وأولياء الأمو
                     conn.commit(); conn.close()
                     
                     # مزامنة سحابية بعد الحذف
-                    if conn_gs:
-                        try:
-                            gs_data_p = edited_p[edited_p['حذف'] == False].drop(columns=['id', 'حذف'], errors='ignore')
-                            conn_gs.update(worksheet="Parents", data=gs_data_p)
-                        except: pass
+                    push_to_gs("parents")
                         
                     st.success("تم الحذف بنجاح")
                     st.rerun()
@@ -630,12 +647,10 @@ elif menu == "👨‍👩‍👧‍👦 الشركاء وأولياء الأمو
                         conn.execute("""UPDATE parents SET name=?, participation_type=?, expertise=?, interaction_level=?, phone=? WHERE id=?""",
                                      (row['الاسم'], row['نوع المشاركة'], row['الخبرة/المجال'], row['مستوى التفاعل'], row.get('الهاتف', ''), row['id']))
                 conn.commit(); conn.close()
-                if conn_gs:
-                    try: 
-                        gs_data_p = edited_p.drop(columns=['id', 'حذف'], errors='ignore')
-                        conn_gs.update(worksheet="Parents", data=gs_data_p)
-                    except Exception as e:
-                        st.warning(f"⚠️ فشل تحديث Google Sheets: {e}")
+                
+                # مزامنة سحابية
+                push_to_gs("parents")
+                
                 st.success("✅ تم التحديث بنجاح")
                 st.rerun()
         else:
@@ -678,10 +693,9 @@ elif menu == "🎭 الفعاليات والأنشطة":
                 el = st.text_input("المكان")
                 at = st.number_input("عدد الحضور المتوقع", 0)
                 if st.form_submit_button("إضافة للجدول"):
-                    success_local = False
                     try:
                         conn = get_connection()
-                        # التأكد من وجود الجدول قبل الإدخال (حل مشكلة البيئات السحابية)
+                        # التأكد من وجود الجدول قبل الإدخال
                         conn.execute('''CREATE TABLE IF NOT EXISTS events (
                             id INTEGER PRIMARY KEY AUTOINCREMENT,
                             name TEXT NOT NULL,
@@ -694,35 +708,15 @@ elif menu == "🎭 الفعاليات والأنشطة":
                                      (en, str(ed), el, at))
                         conn.commit()
                         conn.close()
-                        success_local = True
-                    except Exception as e:
-                        # إذا فشل الحفظ المحلي في السحاب، لا نتوقف بل نحاول السحابي فقط
-                        st.info("ℹ️ ملاحظة: سيتم الحفظ سحابياً فقط (البيئة المحلية مؤقتة)")
-                    
-                    # مزامنة سحابية (الأولوية القصوى)
-                    if conn_gs:
-                        try:
-                            new_data = pd.DataFrame([{"الفعالية": en, "التاريخ": str(ed), "المكان": el, "الحضور": at}])
-                            try:
-                                existing = conn_gs.read(worksheet="Events", ttl=0)
-                                existing = existing.dropna(how='all')
-                                updated = pd.concat([existing, new_data], ignore_index=True)
-                            except: updated = new_data
-                            conn_gs.update(worksheet="Events", data=updated)
-                            st.success("✅ تم الحفظ بنجاح في جوجل شيت")
-                            time.sleep(1)
-                            st.rerun()
-                        except Exception as e:
-                            if "Events" in str(e):
-                                st.error("❌ لم يتم العثور على تبويب باسم 'Events' في ملف جوجل شيت. يرجى التأكد من وجود ورقة عمل بهذا الاسم بالضبط.")
-                            else:
-                                st.error(f"❌ فشل الحفظ في جوجل شيت: {e}")
-                    elif success_local:
-                        st.success("✅ تم الحفظ محلياً")
+                        
+                        # مزامنة سحابية
+                        push_to_gs("events")
+                        
+                        st.success("✅ تم الحفظ بنجاح")
                         time.sleep(1)
                         st.rerun()
-                    else:
-                        st.error("❌ فشل الحفظ في جميع الوسائط. يرجى التحقق من الربط.")
+                    except Exception as e:
+                        st.error(f"❌ فشل الحفظ: {e}")
     
     df_e = load_data("events")
     if not df_e.empty:
@@ -757,11 +751,7 @@ elif menu == "🎭 الفعاليات والأنشطة":
                     conn.commit(); conn.close()
                     
                     # مزامنة سحابية بعد الحذف
-                    if conn_gs:
-                        try:
-                            gs_data_e = edited_e[edited_e['حذف'] == False].drop(columns=['id', 'حذف'], errors='ignore')
-                            conn_gs.update(worksheet="Events", data=gs_data_e)
-                        except: pass
+                    push_to_gs("events")
                         
                     st.success("تم الحذف بنجاح")
                     st.rerun()
@@ -773,12 +763,10 @@ elif menu == "🎭 الفعاليات والأنشطة":
                         conn.execute("""UPDATE events SET name=?, date=?, location=?, attendees_count=?, rating=? WHERE id=?""",
                                      (row['الفعالية'], str(row['التاريخ']), row['المكان'], row['الحضور المتوقع'], row.get('التقييم', 0), row['id']))
                 conn.commit(); conn.close()
-                if conn_gs:
-                    try: 
-                        gs_data_e = edited_e.drop(columns=['حذف', 'id'], errors='ignore')
-                        conn_gs.update(worksheet="Events", data=gs_data_e)
-                    except Exception as e:
-                        st.warning(f"⚠️ فشل تحديث Google Sheets: {e}")
+                
+                # مزامنة سحابية
+                push_to_gs("events")
+                
                 st.success("✅ تم تحديث الفعاليات بنجاح")
                 st.rerun()
         else:
