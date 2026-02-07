@@ -487,8 +487,18 @@ elif menu == "👨‍👩‍👧‍👦 الشركاء وأولياء الأمو
             'participation_type': 'نوع المشاركة',
             'expertise': 'الخبرة/المجال',
             'interaction_level': 'مستوى التفاعل',
-            'phone': 'الهاتف'
+            'phone': 'رقم الهاتف'
         })
+        
+        # إضافة عمود لرابط واتساب
+        def make_whatsapp_link(phone):
+            if phone:
+                # تنظيف الرقم من المسافات أو الرموز
+                clean_phone = ''.join(filter(str.isdigit, str(phone)))
+                return f"https://wa.me/{clean_phone}"
+            return ""
+
+        display_p['واتساب'] = display_p['رقم الهاتف'].apply(make_whatsapp_link)
         
         if is_admin:
             display_p['حذف'] = False
@@ -497,7 +507,10 @@ elif menu == "👨‍👩‍👧‍👦 الشركاء وأولياء الأمو
                 key="p_edit", 
                 use_container_width=True, 
                 num_rows="dynamic",
-                column_config={"id": st.column_config.NumberColumn("ID", disabled=True)}
+                column_config={
+                    "id": st.column_config.NumberColumn("ID", disabled=True),
+                    "واتساب": st.column_config.LinkColumn("📲 إرسال", display_text="إرسال رسالة")
+                }
             )
             
             c_p1, c_p2 = st.columns(2)
@@ -544,6 +557,13 @@ elif menu == "👨‍👩‍👧‍👦 الشركاء وأولياء الأمو
                 cl1, cl2 = st.columns([1, 2])
                 cl1.markdown(f"### 👤 {row['name']}")
                 cl1.caption(f"🛡️ {row['participation_type']} | {row['expertise']}")
+                
+                # إضافة زر واتساب للبطاقة
+                if row.get('phone'):
+                    clean_p = ''.join(filter(str.isdigit, str(row['phone'])))
+                    wa_url = f"https://wa.me/{clean_p}"
+                    cl1.markdown(f"[📲 تواصل عبر واتساب]({wa_url})")
+                
                 if not df_e.empty and 'name' in df_e.columns:
                     linked = df_e[df_e['name'].str.contains(row['name'], na=False)]
                     if not linked.empty:
