@@ -7,7 +7,16 @@ import time
 from streamlit_gsheets import GSheetsConnection
 
 # إعدادات الصفحة
-st.set_page_config(page_title="مساعد مشرف تنمية العلاقات المجتمعية", layout="wide", initial_sidebar_state="auto")
+if 'sidebar_state' not in st.session_state:
+    st.session_state.sidebar_state = "expanded"
+
+st.set_page_config(page_title="مساعد مشرف تنمية العلاقات المجتمعية", layout="wide", initial_sidebar_state=st.session_state.sidebar_state)
+
+# زر مخصص لتبديل القائمة الجانبية
+col_side, _ = st.columns([1, 10])
+if col_side.button("☰ القائمة"):
+    st.session_state.sidebar_state = "collapsed" if st.session_state.sidebar_state == "expanded" else "expanded"
+    st.rerun()
 
 # تهيئة قاعدة البيانات المحلية
 init_db()
@@ -69,8 +78,8 @@ st.markdown("""
         text-align: right;
     }
 
-    /* إخفاء أيقونات المشاركة والإعدادات مع الإبقاء على زر القائمة */
-    [data-testid="stHeaderActionElements"] {display: none;}
+    /* إخفاء الشريط العلوي بالكامل */
+    header {visibility: hidden; height: 0px;}
     #MainMenu {visibility: hidden;}
     footer {visibility: hidden;}
     .stDeployButton {display:none;}
