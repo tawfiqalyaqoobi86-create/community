@@ -161,127 +161,102 @@ def load_data(table):
     return df
 
 def sync_data_from_gs(force=False):
+    """إعادة برمجة شاملة لجلب البيانات من جوجل شيت"""
     if not conn_gs:
-        st.sidebar.error("⚠️ لا يوجد اتصال بجوجل شيت")
+        st.sidebar.error("❌ لا يوجد اتصال بجوجل شيت")
         return 0
     
     init_db()
-    # ... rest of sync_data_from_gs remains same ...
     
-    tables_map = {
-        "action_plan": (["الخطة", "ActionPlan"], {
-            "الهدف": "objective", "النشاط": "activity", "المسؤول": "responsibility", 
-            "الزمن": "timeframe", "KPI": "kpi", "الأولوية": "priority", 
-            "النوع": "task_type", "الحالة": "status"
-        }),
-        "parents": (["الشركاء", "Parents"], {
-            "الاسم": "name", "النوع": "participation_type", 
-            "الخبرة": "expertise", "التفاعل": "interaction_level",
-            "الهاتف": "phone"
-        }),
-        "events": (["الفعاليات", "Events"], {
-            "الفعالية": "name", "التاريخ": "date", 
-            "المكان": "location", "الحضور": "attendees_count",
-            "التقييم": "rating"
-        })
+    # تعريف الجداول والخرائط (Mapping)
+    config = {
+        "action_plan": {
+            "ws": "الخطة",
+            "map": {"الهدف": "objective", "النشاط": "activity", "المسؤول": "responsibility", "الزمن": "timeframe", "KPI": "kpi", "الأولوية": "priority", "النوع": "task_type", "الحالة": "status"}
+        },
+        "parents": {
+            "ws": "الشركاء",
+            "map": {"الاسم": "name", "النوع": "participation_type", "الخبرة": "expertise", "التفاعل": "interaction_level", "الهاتف": "phone"}
+        },
+        "events": {
+            "ws": "الفعاليات",
+            "map": {"الفعالية": "name", "التاريخ": "date", "المكان": "location", "الحضور": "attendees_count", "التقييم": "rating"}
+        }
     }
     
     conn = get_connection()
     success_count = 0
     
-    for table, (ws_options, mapping) in tables_map.items():
-        gs_df = None
-        current_ws = ""
-        for ws in ws_options:
-            try:
-                spreadsheet_url = st.secrets["connections"]["gsheets"]["spreadsheet"]
-                gs_df = conn_gs.read(spreadsheet=spreadsheet_url, worksheet=ws, ttl=0)
-                if gs_df is not None:
-                    current_ws = ws
-                    break
-            except:
-                continue
-        
-        if gs_df is not None:
-            try:
-                gs_df = gs_df.dropna(how='all')
-                if not gs_df.empty:
-                    gs_df.columns = gs_df.columns.str.strip()
-                    # تحويل أسماء الأعمدة من العربي (في الشيت) إلى الإنجليزي (في القاعدة)
-                    to_insert = gs_df.rename(columns=mapping)
-                    
-                    # إذا كانت البيانات في الشيت أصلاً بالأسماء الإنجليزية، نستخدمها مباشرة
-                    rev_mapping = {v: v for v in mapping.values()}
-                    to_insert = to_insert.rename(columns=rev_mapping)
-                    
-                    cols = list(mapping.values())
-                    to_insert = to_insert[[c for c in cols if c in to_insert.columns]]
-                    
-                    if not to_insert.empty:
-                        conn.execute(f"DELETE FROM {table}")
-                        to_insert.to_sql(table, conn, if_exists='append', index=False)
-                        success_count += 1
-                        st.sidebar.success(f"✅ تم جلب {current_ws}")
-            except Exception as e:
-                st.sidebar.warning(f"⚠️ خطأ في معالجة {current_ws}")
+    for table, cfg in config.items():
+        try:
+            # قراءة البيانات
+            df_gs = conn_gs.read(worksheet=cfg["ws"], ttl=0)
+            if df_gs is not None and not df_gs.empty:
+                df_gs = df_gs.dropna(how='all')
+                # تنظيف أسماء الأعمدة
+                df_gs.columns = df_gs.columns.str.strip()
+                # إعادة التسمية بناءً على الخريطة
+                final_df = df_gs.rename(columns=cfg["map"])
+                # الاحتفاظ بالأعمدة المطلوبة فقط والموجودة فعلياً
+                needed_cols = list(cfg["map"].values())
+                final_df = final_df[[c for c in needed_cols if c in final_df.columns]]
+                
+                if not final_df.empty:
+                    conn.execute(f"DELETE FROM {table}")
+                    final_df.to_sql(table, conn, if_exists='append', index=False)
+                    success_count += 1
+                    st.sidebar.success(f"✅ تم استيراد '{cfg['ws']}' بنجاح")
+        except Exception as e:
+            st.sidebar.warning(f"⚠️ تعذر جلب '{cfg['ws']}': {str(e)[:50]}...")
             
     conn.close()
     return success_count
 
 def push_to_gs(table):
-    """رفع كافة البيانات المحلية لجدول معين إلى جوجل شيت لضمان الثبات"""
+    """إعادة برمجة شاملة لحفظ البيانات في جوجل شيت"""
     if not conn_gs:
         return
     
-    tables_map = {
-        "action_plan": (["الخطة", "ActionPlan"], {
-            "objective": "الهدف", "activity": "النشاط", "responsibility": "المسؤول", 
-            "timeframe": "الزمن", "kpi": "KPI", "priority": "الأولوية", 
-            "task_type": "النوع", "status": "الحالة"
-        }),
-        "parents": (["الشركاء", "Parents"], {
-            "name": "الاسم", "participation_type": "النوع", 
-            "expertise": "الخبرة", "interaction_level": "التفاعل",
-            "phone": "الهاتف"
-        }),
-        "events": (["الفعاليات", "Events"], {
-            "name": "الفعالية", "date": "التاريخ", 
-            "location": "المكان", "attendees_count": "الحضور",
-            "rating": "التقييم"
-        })
+    config = {
+        "action_plan": {
+            "ws": "الخطة",
+            "map": {"objective": "الهدف", "activity": "النشاط", "responsibility": "المسؤول", "timeframe": "الزمن", "kpi": "KPI", "priority": "الأولوية", "task_type": "النوع", "status": "الحالة"}
+        },
+        "parents": {
+            "ws": "الشركاء",
+            "map": {"name": "الاسم", "participation_type": "النوع", "expertise": "الخبرة", "interaction_level": "التفاعل", "phone": "الهاتف"}
+        },
+        "events": {
+            "ws": "الفعاليات",
+            "map": {"name": "الفعالية", "date": "التاريخ", "location": "المكان", "attendees_count": "الحضور", "rating": "التقييم"}
+        }
     }
     
-    if table in tables_map:
-        ws_options, mapping = tables_map[table]
-        conn = get_connection()
-        try:
-            df = pd.read_sql(f"SELECT * FROM {table}", conn)
-            
-            # محاولة العثور على ورقة العمل المناسبة
-            ws_name = ws_options[0] # الافتراضي هو العربي
-            for ws in ws_options:
-                try:
-                    spreadsheet_url = st.secrets["connections"]["gsheets"]["spreadsheet"]
-                    # فقط للتحقق من وجود الورقة
-                    conn_gs.read(spreadsheet=spreadsheet_url, worksheet=ws, ttl=0)
-                    ws_name = ws
-                    break
-                except:
-                    continue
+    if table not in config:
+        return
 
-            if not df.empty:
-                to_upload = df.drop(columns=['id'], errors='ignore').rename(columns=mapping)
-                cols_to_keep = [c for c in mapping.values() if c in to_upload.columns]
-                to_upload = to_upload[cols_to_keep]
-                conn_gs.update(worksheet=ws_name, data=to_upload)
-                st.sidebar.success(f"☁️ تم تحديث {ws_name}")
-            else:
-                # لا نقوم بمسح جوجل شيت إذا كانت البيانات المحلية فارغة منعاً للفقدان
-                st.sidebar.info(f"ℹ️ {ws_name} محلياً فارغ، لم يتم تحديث السحابة")
-        except Exception as e:
-            st.sidebar.error(f"❌ فشل الحفظ في السحابة")
-        finally:
-            conn.close()
+    conn = get_connection()
+    try:
+        # قراءة البيانات المحلية
+        df_local = pd.read_sql(f"SELECT * FROM {table}", conn)
+        
+        if not df_local.empty:
+            # تحضير البيانات للرفع
+            df_to_push = df_local.drop(columns=['id'], errors='ignore').rename(columns=config[table]["map"])
+            # التأكد من ترتيب الأعمدة كما في الخريطة
+            cols_order = list(config[table]["map"].values())
+            df_to_push = df_to_push[[c for c in cols_order if c in df_to_push.columns]]
+            
+            # محاولة التحديث
+            conn_gs.update(worksheet=config[table]["ws"], data=df_to_push)
+            st.sidebar.success(f"☁️ تم تحديث سحابة '{config[table]['ws']}'")
+        else:
+            st.sidebar.info(f"ℹ️ جدول {config[table]['ws']} فارغ محلياً")
+            
+    except Exception as e:
+        st.sidebar.error(f"❌ فشل تحديث {config[table]['ws']}: {str(e)[:50]}")
+    finally:
+        conn.close()
 
 # --- القائمة الجانبية ---
 # الساعة والتاريخ (ساعة حية)
@@ -341,7 +316,7 @@ with st.sidebar:
                         st.sidebar.warning("لم يتم العثور على بيانات في ملف جوجل شيت")
                 except Exception as e:
                     st.sidebar.error(f"❌ خطأ في الاتصال: {e}")
-                    st.sidebar.info("تأكد من أن أسماء أوراق العمل (Worksheets) في جوجل شيت هي بالعربي: (الخطة، الشركاء، الفعاليات) أو بالإنجليزي: (ActionPlan, Parents, Events)")
+                    st.sidebar.info("تأكد من وجود أوراق عمل بالأسماء التالية في ملف جوجل شيت: (الخطة، الشركاء، الفعاليات)")
     else:
         st.sidebar.error("❌ غير متصل بسحاب جوجل")
         st.sidebar.markdown("""
