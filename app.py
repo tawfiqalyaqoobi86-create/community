@@ -7,7 +7,7 @@ import time
 from streamlit_gsheets import GSheetsConnection
 
 # إعدادات الصفحة
-st.set_page_config(page_title="مساعد مشرف تنمية العلاقات المجتمعية", layout="wide", initial_sidebar_state="expanded")
+st.set_page_config(page_title="مساعد مشرف تنمية العلاقات المجتمعية", layout="wide", initial_sidebar_state="auto")
 
 # تهيئة قاعدة البيانات المحلية
 init_db()
@@ -51,20 +51,6 @@ if not st.session_state.logged_in:
     st.stop()
 
 is_admin = st.session_state.user_role == "admin"
-
-# إخفاء القائمة والمميزات عن الزوار لتعزيز الخصوصية
-if not is_admin:
-    st.markdown("""
-        <style>
-        #MainMenu {visibility: hidden;}
-        footer {visibility: hidden;}
-        header {visibility: hidden;}
-        /* إخفاء زر إغلاق القائمة الجانبية فقط مع الحفاظ على ظهور القائمة */
-        [data-testid="stSidebarCollapseButton"] {
-            display: none !important;
-        }
-        </style>
-        """, unsafe_allow_html=True)
 
 # محاولة الربط بجوجل شيت
 try:
