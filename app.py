@@ -555,7 +555,8 @@ elif menu == "👨‍👩‍👧‍👦 الشركاء وأولياء الأمو
                 st.success("✅ تم التحديث بنجاح")
                 st.rerun()
         else:
-            st.dataframe(display_p.drop(columns=['id'], errors='ignore'), use_container_width=True)
+            # الزوار لا يرون عمود الهاتف ولا عمود الواتساب الذكي
+            st.dataframe(display_p.drop(columns=['id', 'رقم الهاتف', 'واتساب الذكي'], errors='ignore'), use_container_width=True)
         
         st.divider()
         for _, row in df_p.iterrows():
