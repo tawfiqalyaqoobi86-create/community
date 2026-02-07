@@ -447,8 +447,19 @@ elif menu == "👨‍👩‍👧‍👦 الشركاء وأولياء الأمو
                 phone = st.text_input("رقم الهاتف")
                 if st.form_submit_button("إضافة شريك"):
                     conn = get_connection()
-                    conn.execute("INSERT INTO parents (name, participation_type, expertise, interaction_level, phone) VALUES (?,?,?,?,?)", (name, type_p, exp, level, phone))
-                    conn.commit(); conn.close()
+                    try:
+                        conn.execute("INSERT INTO parents (name, participation_type, expertise, interaction_level, phone) VALUES (?,?,?,?,?)", (name, type_p, exp, level, phone))
+                        conn.commit()
+                    except Exception as e:
+                        if "no column named phone" in str(e):
+                            conn.execute("ALTER TABLE parents ADD COLUMN phone TEXT")
+                            conn.commit()
+                            conn.execute("INSERT INTO parents (name, participation_type, expertise, interaction_level, phone) VALUES (?,?,?,?,?)", (name, type_p, exp, level, phone))
+                            conn.commit()
+                        else:
+                            st.error(f"خطأ: {e}")
+                    finally:
+                        conn.close()
                     
                     # مزامنة سحابية
                     if conn_gs:
