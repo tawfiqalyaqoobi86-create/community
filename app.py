@@ -346,6 +346,12 @@ elif menu == "📅 خطة العمل":
     if not df_pl.empty:
         st.subheader("📋 بنود الخطة (يمكنك التعديل مباشرة من الجدول)")
         
+        # تحويل العمود لتاريخ بشكل آمن قبل العرض لمنع الخطأ
+        try:
+            df_pl['timeframe'] = pd.to_datetime(df_pl['timeframe'], errors='coerce')
+        except:
+            pass
+            
         # ترجمة الأعمدة للعرض
         display_pl = df_pl.rename(columns={
             'objective': 'الهدف',
