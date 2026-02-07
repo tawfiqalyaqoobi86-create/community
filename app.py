@@ -171,7 +171,8 @@ def sync_data_from_gs():
         }),
         "parents": ("Parents", {
             "الاسم": "name", "النوع": "participation_type", 
-            "الخبرة": "expertise", "التفاعل": "interaction_level"
+            "الخبرة": "expertise", "التفاعل": "interaction_level",
+            "الهاتف": "phone"
         }),
         "events": ("Events", {
             "الفعالية": "name", "التاريخ": "date", 
@@ -443,15 +444,16 @@ elif menu == "👨‍👩‍👧‍👦 الشركاء وأولياء الأمو
                 type_p = st.selectbox("مجال الشراكة", ["دعم تعليمي", "دعم مالي", "خبرات مهنية", "تطوع", "مبادرات"])
                 exp = st.text_input("المجال / الخبرة التخصصية")
                 level = st.selectbox("مستوى التفاعل المتوقع", ["مرتفع", "متوسط", "محدود"])
+                phone = st.text_input("رقم الهاتف")
                 if st.form_submit_button("إضافة شريك"):
                     conn = get_connection()
-                    conn.execute("INSERT INTO parents (name, participation_type, expertise, interaction_level) VALUES (?,?,?,?)", (name, type_p, exp, level))
+                    conn.execute("INSERT INTO parents (name, participation_type, expertise, interaction_level, phone) VALUES (?,?,?,?,?)", (name, type_p, exp, level, phone))
                     conn.commit(); conn.close()
                     
                     # مزامنة سحابية
                     if conn_gs:
                         try:
-                            new_data = pd.DataFrame([{"الاسم": name, "النوع": type_p, "الخبرة": exp, "التفاعل": level, "التاريخ": str(datetime.now())}])
+                            new_data = pd.DataFrame([{"الاسم": name, "النوع": type_p, "الخبرة": exp, "التفاعل": level, "الهاتف": phone, "التاريخ": str(datetime.now())}])
                             try:
                                 existing = conn_gs.read(worksheet="Parents", ttl=0)
                                 existing = existing.dropna(how='all')
@@ -473,7 +475,8 @@ elif menu == "👨‍👩‍👧‍👦 الشركاء وأولياء الأمو
             'name': 'الاسم',
             'participation_type': 'نوع المشاركة',
             'expertise': 'الخبرة/المجال',
-            'interaction_level': 'مستوى التفاعل'
+            'interaction_level': 'مستوى التفاعل',
+            'phone': 'الهاتف'
         })
         
         if is_admin:
@@ -510,8 +513,8 @@ elif menu == "👨‍👩‍👧‍👦 الشركاء وأولياء الأمو
                 conn = get_connection()
                 for _, row in edited_p.iterrows():
                     if 'id' in row and not pd.isna(row['id']):
-                        conn.execute("""UPDATE parents SET name=?, participation_type=?, expertise=?, interaction_level=? WHERE id=?""",
-                                     (row['الاسم'], row['نوع المشاركة'], row['الخبرة/المجال'], row['مستوى التفاعل'], row['id']))
+                        conn.execute("""UPDATE parents SET name=?, participation_type=?, expertise=?, interaction_level=?, phone=? WHERE id=?""",
+                                     (row['الاسم'], row['نوع المشاركة'], row['الخبرة/المجال'], row['مستوى التفاعل'], row.get('الهاتف', ''), row['id']))
                 conn.commit(); conn.close()
                 if conn_gs:
                     try: 
