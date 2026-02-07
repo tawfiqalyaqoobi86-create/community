@@ -158,36 +158,28 @@ def load_data(table):
     except Exception:
         df = pd.DataFrame()
     conn.close()
-    
-    # إذا كانت البيانات فارغة محلياً وهناك اتصال بجوجل شيت، نحاول المزامنة تلقائياً
-    if df.empty and conn_gs:
-        sync_data_from_gs()
-        conn = get_connection()
-        try: 
-            df = pd.read_sql(f"SELECT * FROM {table}", conn)
-        except: 
-            df = pd.DataFrame()
-        conn.close()
     return df
 
 def sync_data_from_gs(force=False):
     if not conn_gs:
+        st.sidebar.error("⚠️ لا يوجد اتصال بجوجل شيت")
         return 0
     
     init_db()
+    # ... rest of sync_data_from_gs remains same ...
     
     tables_map = {
-        "action_plan": ("الخطة", {
+        "action_plan": (["الخطة", "ActionPlan"], {
             "الهدف": "objective", "النشاط": "activity", "المسؤول": "responsibility", 
             "الزمن": "timeframe", "KPI": "kpi", "الأولوية": "priority", 
             "النوع": "task_type", "الحالة": "status"
         }),
-        "parents": ("الشركاء", {
+        "parents": (["الشركاء", "Parents"], {
             "الاسم": "name", "النوع": "participation_type", 
             "الخبرة": "expertise", "التفاعل": "interaction_level",
             "الهاتف": "phone"
         }),
-        "events": ("الفعاليات", {
+        "events": (["الفعاليات", "Events"], {
             "الفعالية": "name", "التاريخ": "date", 
             "المكان": "location", "الحضور": "attendees_count",
             "التقييم": "rating"
@@ -197,16 +189,31 @@ def sync_data_from_gs(force=False):
     conn = get_connection()
     success_count = 0
     
-    for table, (ws, mapping) in tables_map.items():
-        try:
-            spreadsheet_url = st.secrets["connections"]["gsheets"]["spreadsheet"]
-            gs_df = conn_gs.read(spreadsheet=spreadsheet_url, worksheet=ws, ttl=0)
-            
-            if gs_df is not None:
+    for table, (ws_options, mapping) in tables_map.items():
+        gs_df = None
+        current_ws = ""
+        for ws in ws_options:
+            try:
+                spreadsheet_url = st.secrets["connections"]["gsheets"]["spreadsheet"]
+                gs_df = conn_gs.read(spreadsheet=spreadsheet_url, worksheet=ws, ttl=0)
+                if gs_df is not None:
+                    current_ws = ws
+                    break
+            except:
+                continue
+        
+        if gs_df is not None:
+            try:
                 gs_df = gs_df.dropna(how='all')
                 if not gs_df.empty:
                     gs_df.columns = gs_df.columns.str.strip()
+                    # تحويل أسماء الأعمدة من العربي (في الشيت) إلى الإنجليزي (في القاعدة)
                     to_insert = gs_df.rename(columns=mapping)
+                    
+                    # إذا كانت البيانات في الشيت أصلاً بالأسماء الإنجليزية، نستخدمها مباشرة
+                    rev_mapping = {v: v for v in mapping.values()}
+                    to_insert = to_insert.rename(columns=rev_mapping)
+                    
                     cols = list(mapping.values())
                     to_insert = to_insert[[c for c in cols if c in to_insert.columns]]
                     
@@ -214,9 +221,9 @@ def sync_data_from_gs(force=False):
                         conn.execute(f"DELETE FROM {table}")
                         to_insert.to_sql(table, conn, if_exists='append', index=False)
                         success_count += 1
-                        st.sidebar.success(f"✅ تم ربط {ws}")
-        except Exception as gs_err:
-            st.sidebar.warning(f"⚠️ لم نجد صفحة باسم '{ws}'")
+                        st.sidebar.success(f"✅ تم جلب {current_ws}")
+            except Exception as e:
+                st.sidebar.warning(f"⚠️ خطأ في معالجة {current_ws}")
             
     conn.close()
     return success_count
@@ -227,17 +234,17 @@ def push_to_gs(table):
         return
     
     tables_map = {
-        "action_plan": ("الخطة", {
+        "action_plan": (["الخطة", "ActionPlan"], {
             "objective": "الهدف", "activity": "النشاط", "responsibility": "المسؤول", 
             "timeframe": "الزمن", "kpi": "KPI", "priority": "الأولوية", 
             "task_type": "النوع", "status": "الحالة"
         }),
-        "parents": ("الشركاء", {
+        "parents": (["الشركاء", "Parents"], {
             "name": "الاسم", "participation_type": "النوع", 
             "expertise": "الخبرة", "interaction_level": "التفاعل",
             "phone": "الهاتف"
         }),
-        "events": ("الفعاليات", {
+        "events": (["الفعاليات", "Events"], {
             "name": "الفعالية", "date": "التاريخ", 
             "location": "المكان", "attendees_count": "الحضور",
             "rating": "التقييم"
@@ -245,10 +252,23 @@ def push_to_gs(table):
     }
     
     if table in tables_map:
-        ws_name, mapping = tables_map[table]
+        ws_options, mapping = tables_map[table]
         conn = get_connection()
         try:
             df = pd.read_sql(f"SELECT * FROM {table}", conn)
+            
+            # محاولة العثور على ورقة العمل المناسبة
+            ws_name = ws_options[0] # الافتراضي هو العربي
+            for ws in ws_options:
+                try:
+                    spreadsheet_url = st.secrets["connections"]["gsheets"]["spreadsheet"]
+                    # فقط للتحقق من وجود الورقة
+                    conn_gs.read(spreadsheet=spreadsheet_url, worksheet=ws, ttl=0)
+                    ws_name = ws
+                    break
+                except:
+                    continue
+
             if not df.empty:
                 to_upload = df.drop(columns=['id'], errors='ignore').rename(columns=mapping)
                 cols_to_keep = [c for c in mapping.values() if c in to_upload.columns]
@@ -256,10 +276,10 @@ def push_to_gs(table):
                 conn_gs.update(worksheet=ws_name, data=to_upload)
                 st.sidebar.success(f"☁️ تم تحديث {ws_name}")
             else:
-                empty_df = pd.DataFrame(columns=list(mapping.values()))
-                conn_gs.update(worksheet=ws_name, data=empty_df)
+                # لا نقوم بمسح جوجل شيت إذا كانت البيانات المحلية فارغة منعاً للفقدان
+                st.sidebar.info(f"ℹ️ {ws_name} محلياً فارغ، لم يتم تحديث السحابة")
         except Exception as e:
-            st.sidebar.error(f"❌ فشل الحفظ في {ws_name}")
+            st.sidebar.error(f"❌ فشل الحفظ في السحابة")
         finally:
             conn.close()
 
@@ -321,7 +341,7 @@ with st.sidebar:
                         st.sidebar.warning("لم يتم العثور على بيانات في ملف جوجل شيت")
                 except Exception as e:
                     st.sidebar.error(f"❌ خطأ في الاتصال: {e}")
-                    st.sidebar.info("تأكد من أن أسماء أوراق العمل (Worksheets) في جوجل شيت هي: ActionPlan, Parents, Events")
+                    st.sidebar.info("تأكد من أن أسماء أوراق العمل (Worksheets) في جوجل شيت هي بالعربي: (الخطة، الشركاء، الفعاليات) أو بالإنجليزي: (ActionPlan, Parents, Events)")
     else:
         st.sidebar.error("❌ غير متصل بسحاب جوجل")
         st.sidebar.markdown("""
@@ -636,7 +656,7 @@ elif menu == "👨‍👩‍👧‍👦 الشركاء وأولياء الأمو
                 for _, row in edited_p.iterrows():
                     if 'id' in row and not pd.isna(row['id']):
                         conn.execute("""UPDATE parents SET name=?, participation_type=?, expertise=?, interaction_level=?, phone=? WHERE id=?""",
-                                     (row['الاسم'], row['نوع المشاركة'], row['الخبرة/المجال'], row['مستوى التفاعل'], row.get('الهاتف', ''), row['id']))
+                                     (row['الاسم'], row['نوع المشاركة'], row['الخبرة/المجال'], row['مستوى التفاعل'], row.get('رقم الهاتف', ''), row['id']))
                 conn.commit(); conn.close()
                 
                 # مزامنة سحابية
