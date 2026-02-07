@@ -124,16 +124,24 @@ st.markdown("""
         box-shadow: 0 4px 8px rgba(0,0,0,0.2);
     }
 
-    /* شريط البحث */
+    /* شريط البحث - تحديث اللون للأزرق الغامق */
     section[data-testid="stSidebar"] .stTextInput input {
-        color: #00008B !important; /* أزرق غامق */
-        background-color: white !important;
+        color: #00008B !important;
+        background-color: #ffffff !important;
         font-weight: bold !important;
+        border: 2px solid #34495e !important;
+        border-radius: 10px !important;
     }
     
-    section[data-testid="stSidebar"] .stTextInput label p {
-        color: #ecf0f1 !important;
-        font-weight: bold !important;
+    /* لون النص عند الكتابة */
+    section[data-testid="stSidebar"] .stTextInput input:focus {
+        color: #00008B !important;
+    }
+
+    /* لون الـ Placeholder (النص التوضيحي) */
+    section[data-testid="stSidebar"] .stTextInput input::placeholder {
+        color: #5d6d7e !important;
+        opacity: 0.8;
     }
 
     h1 { color: #2c3e50; border-right: 8px solid #34495e; padding-right: 15px; }
@@ -143,29 +151,31 @@ st.markdown("""
 
 # --- وظائف مساعدة ---
 def load_data(table):
+    init_db() # التأكد من وجود الجداول أولاً
     conn = get_connection()
     try:
         df = pd.read_sql(f"SELECT * FROM {table}", conn)
     except Exception:
-        init_db()
-        try: df = pd.read_sql(f"SELECT * FROM {table}", conn)
-        except: df = pd.DataFrame()
+        df = pd.DataFrame()
     conn.close()
     
-    # إذا كانت البيانات فارغة محلياً وهناك اتصال بجوجل شيت، نحاول المزامنة
+    # إذا كانت البيانات فارغة محلياً وهناك اتصال بجوجل شيت، نحاول المزامنة تلقائياً
     if df.empty and conn_gs:
         sync_data_from_gs()
-        # محاولة التحميل مرة أخرى بعد المزامنة
         conn = get_connection()
-        try: df = pd.read_sql(f"SELECT * FROM {table}", conn)
-        except: df = pd.DataFrame()
+        try: 
+            df = pd.read_sql(f"SELECT * FROM {table}", conn)
+        except: 
+            df = pd.DataFrame()
         conn.close()
-        
     return df
 
 def sync_data_from_gs(force=False):
     if not conn_gs:
-        return
+        return 0
+    
+    # التأكد من تهيئة قاعدة البيانات قبل المزامنة
+    init_db()
     
     tables_map = {
         "action_plan": ("ActionPlan", {
@@ -188,27 +198,33 @@ def sync_data_from_gs(force=False):
     success_count = 0
     for table, (ws, mapping) in tables_map.items():
         try:
-            # التحقق إذا كان الجدول فارغاً أو إذا كان طلباً يدوياً (force)
-            local_count = pd.read_sql(f"SELECT COUNT(*) as count FROM {table}", conn).iloc[0]['count']
+            # التحقق من وجود الجدول وعدد الصفوف
+            try:
+                local_count = pd.read_sql(f"SELECT COUNT(*) as count FROM {table}", conn).iloc[0]['count']
+            except:
+                local_count = 0
+                
             if local_count == 0 or force:
-                gs_df = conn_gs.read(worksheet=ws, ttl=0)
+                # محاولة القراءة مع التعامل مع الأخطاء المحتملة في جوجل شيت
+                try:
+                    gs_df = conn_gs.read(worksheet=ws, ttl=0)
+                except Exception as gs_err:
+                    st.sidebar.warning(f"⚠️ {table}: لم نتمكن من الوصول لورقة {ws}")
+                    continue
+
                 if gs_df is not None and not gs_df.empty:
                     gs_df = gs_df.dropna(how='all')
-                    # تنظيف أسماء الأعمدة من المسافات
                     gs_df.columns = gs_df.columns.str.strip()
-                    # إعادة تسمية الأعمدة للمطابقة
                     to_insert = gs_df.rename(columns=mapping)
-                    # الاحتفاظ فقط بالأعمدة الموجودة في الجدول
                     cols = list(mapping.values())
                     to_insert = to_insert[[c for c in cols if c in to_insert.columns]]
                     
                     if not to_insert.empty:
-                        if force: # في حال الاستيراد اليدوي، نمسح المحلي أولاً لتجنب التكرار
-                            conn.execute(f"DELETE FROM {table}")
+                        conn.execute(f"DELETE FROM {table}")
                         to_insert.to_sql(table, conn, if_exists='append', index=False)
                         success_count += 1
         except Exception as e:
-            st.sidebar.error(f"⚠️ فشل مزامنة {table}: {e}")
+            st.sidebar.error(f"⚠️ خطأ في {table}: {str(e)[:50]}")
     conn.close()
     return success_count
 
@@ -260,16 +276,24 @@ with st.sidebar:
         st.sidebar.success("✅ متصل بـ Google Sheets")
         if st.sidebar.button("🔄 استعادة البيانات من السحاب"):
             with st.spinner("جاري استعادة البيانات..."):
-                count = sync_data_from_gs(force=True)
-                if count > 0:
-                    st.sidebar.success(f"تمت استعادة {count} جداول")
-                    time.sleep(1)
-                    st.rerun()
-                else:
-                    st.sidebar.warning("لم يتم العثور على بيانات جديدة")
+                try:
+                    count = sync_data_from_gs(force=True)
+                    if count > 0:
+                        st.sidebar.success(f"تمت استعادة {count} جداول")
+                        time.sleep(1)
+                        st.rerun()
+                    else:
+                        st.sidebar.warning("لم يتم العثور على بيانات في ملف جوجل شيت")
+                except Exception as e:
+                    st.sidebar.error(f"❌ خطأ في الاتصال: {e}")
+                    st.sidebar.info("تأكد من أن أسماء أوراق العمل (Worksheets) في جوجل شيت هي: ActionPlan, Parents, Events")
     else:
-        st.sidebar.error("❌ غير متصل بـ Google Sheets")
-        st.sidebar.info("تأكد من إعداد Secrets في Streamlit Cloud")
+        st.sidebar.error("❌ غير متصل بسحاب جوجل")
+        st.sidebar.markdown("""
+        **طريقة الإصلاح:**
+        1. اذهب لإعدادات التطبيق في Streamlit Cloud.
+        2. في قسم **Secrets**، انسخ محتوى ملف `secrets.toml`.
+        """)
 
 # البحث الذكي
 st.sidebar.markdown('<div class="search-box">', unsafe_allow_html=True)
