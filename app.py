@@ -505,9 +505,8 @@ elif menu == "👨‍👩‍👧‍👦 الشركاء وأولياء الأمو
                 return f"https://api.whatsapp.com/send?phone={clean_phone}&text={encoded_msg}"
             return ""
 
-        display_p['واتساب الذكي'] = display_p.apply(make_ai_whatsapp_link, axis=1)
-        
         if is_admin:
+            display_p['واتساب الذكي'] = display_p.apply(make_ai_whatsapp_link, axis=1)
             display_p['حذف'] = False
             edited_p = st.data_editor(
                 display_p, 
@@ -565,8 +564,8 @@ elif menu == "👨‍👩‍👧‍👦 الشركاء وأولياء الأمو
                 cl1.markdown(f"### 👤 {row['name']}")
                 cl1.caption(f"🛡️ {row['participation_type']} | {row['expertise']}")
                 
-                # إضافة زر واتساب ذكي للبطاقة
-                if row.get('phone'):
+                # إضافة زر واتساب ذكي للبطاقة (للمسؤول فقط)
+                if is_admin and row.get('phone'):
                     name = row.get('name')
                     p_type = row.get('participation_type')
                     clean_p = ''.join(filter(str.isdigit, str(row['phone'])))
@@ -791,24 +790,28 @@ elif menu == "🤖 الذكاء الاصطناعي":
             if 'current_generated_letter' in st.session_state:
                 st.info(st.session_state.current_generated_letter)
                 
-                # جلب رقم الهاتف برمجياً
-                partner_info = df_p[df_p['name'] == p_name].iloc[0]
-                phone = partner_info.get('phone', '')
-                
-                if phone:
-                    clean_phone = ''.join(filter(str.isdigit, str(phone)))
-                    encoded_letter = st.session_state.current_generated_letter.replace(' ', '%20').replace('\n', '%0A')
-                    wa_link = f"https://api.whatsapp.com/send?phone={clean_phone}&text={encoded_letter}"
+                # حجب زر الإرسال عن الزوار
+                if is_admin:
+                    # جلب رقم الهاتف برمجياً
+                    partner_info = df_p[df_p['name'] == p_name].iloc[0]
+                    phone = partner_info.get('phone', '')
                     
-                    st.markdown(f"""
-                        <a href="{wa_link}" target="_blank" style="text-decoration: none;">
-                            <div style="background-color: #25d366; color: white; padding: 10px 20px; border-radius: 8px; text-align: center; font-weight: bold; cursor: pointer;">
-                                🤖 إرسال الخطاب المولد عبر واتساب
-                            </div>
-                        </a>
-                    """, unsafe_allow_html=True)
+                    if phone:
+                        clean_phone = ''.join(filter(str.isdigit, str(phone)))
+                        encoded_letter = st.session_state.current_generated_letter.replace(' ', '%20').replace('\n', '%0A')
+                        wa_link = f"https://api.whatsapp.com/send?phone={clean_phone}&text={encoded_letter}"
+                        
+                        st.markdown(f"""
+                            <a href="{wa_link}" target="_blank" style="text-decoration: none;">
+                                <div style="background-color: #25d366; color: white; padding: 10px 20px; border-radius: 8px; text-align: center; font-weight: bold; cursor: pointer;">
+                                    🤖 إرسال الخطاب المولد عبر واتساب
+                                </div>
+                            </a>
+                        """, unsafe_allow_html=True)
+                    else:
+                        st.warning("⚠️ لا يوجد رقم هاتف مسجل لهذا الشريك لإرسال الخطاب عبر واتساب.")
                 else:
-                    st.warning("⚠️ لا يوجد رقم هاتف مسجل لهذا الشريك لإرسال الخطاب عبر واتساب.")
+                    st.warning("ℹ️ ميزة إرسال الخطابات عبر واتساب متاحة للمسؤول فقط.")
                 
                 if st.button("تصدير كـ PDF"): st.warning("خاصية التصدير قيد التطوير")
         else:
