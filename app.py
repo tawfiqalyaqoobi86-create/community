@@ -52,6 +52,16 @@ if not st.session_state.logged_in:
 
 is_admin = st.session_state.user_role == "admin"
 
+# إخفاء القائمة والمميزات عن الزوار لتعزيز الخصوصية
+if not is_admin:
+    st.markdown("""
+        <style>
+        #MainMenu {visibility: hidden;}
+        footer {visibility: hidden;}
+        header {visibility: hidden;}
+        </style>
+        """, unsafe_allow_html=True)
+
 # محاولة الربط بجوجل شيت
 try:
     conn_gs = st.connection("gsheets", type=GSheetsConnection)
